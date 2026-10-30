@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "ifs_ufs_module_v1.h"
+#include "ifs_ufs_volume_check_v1.h"
+#include "ufs_native.h"
 int ifs_ufs_worker_main(int argc, char **argv);
 int ifs_bind_services(const IfsDefragServicesV1 *);
 void ifs_unbind_services(void);
@@ -15,3 +17,21 @@ static const IfsUfsModuleV1 api = {
     "ufs", IFS_UFS_CAP_RUN | IFS_UFS_CAP_TEST_MEDIA, run, ifs_ufs_mkfs_main
 };
 const IfsUfsModuleV1 *infiltrator_filesystem_ufs_v1(void) { return &api; }
+
+/* UFS-specific interpretation stays in UFS.so, never in Test Media. */
+static int ufs_is_ufs2_le(const char *path)
+{
+    LdUfsSummary summary;
+    char error[256] = {0};
+    if (!path || ufs_read_summary(path, &summary, error, sizeof(error)) != 0)
+        return -1;
+    return summary.variant == LD_UFS_VARIANT_UFS2_LE ? 0 : -1;
+}
+static const IfsUfsVolumeCheckV1 volume_check = {
+    IFS_UFS_VOLUME_CHECK_ABI_V1, sizeof(IfsUfsVolumeCheckV1),
+    "ufs", ufs_is_ufs2_le
+};
+const IfsUfsVolumeCheckV1 *infiltrator_filesystem_ufs_volume_check_v1(void)
+{
+    return &volume_check;
+}
