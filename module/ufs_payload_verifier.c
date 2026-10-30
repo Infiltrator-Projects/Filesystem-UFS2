@@ -385,7 +385,7 @@ cleanup:
 /* Versioned, independently discoverable interface. */
 static const IfsUfsPayloadVerifierV1 payload_verifier = {
     IFS_UFS_PAYLOAD_VERIFIER_ABI_V1, sizeof(IfsUfsPayloadVerifierV1),
-    "ufs", verify_ufs2_raw_payload
+    "ufs2", verify_ufs2_raw_payload
 };
 const IfsUfsPayloadVerifierV1 *
 infiltrator_filesystem_ufs_payload_verifier_v1(void)

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(FilesystemUFS VERSION 1.0.0 LANGUAGES C)
+project(FilesystemUFS2 VERSION 1.0.0 LANGUAGES C)
 include(CTest)
 include(FetchContent)
 find_package(OpenSSL REQUIRED)
@@ -21,8 +21,8 @@ set_source_files_properties(fixtures/ufs_mkfs.c PROPERTIES
  COMPILE_DEFINITIONS "main=ifs_ufs_mkfs_main")
 set_source_files_properties(native/ufs_worker.c PROPERTIES
  COMPILE_DEFINITIONS "main=ifs_ufs_worker_main")
-set_target_properties(ufs-driver PROPERTIES PREFIX "" OUTPUT_NAME "UFS" SUFFIX ".so")
-target_compile_definitions(ufs-driver PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64)
+set_target_properties(ufs-driver PROPERTIES PREFIX "" OUTPUT_NAME "UFS2" SUFFIX ".so")
+target_compile_definitions(ufs-driver PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_UFS_MAJOR=2)
 target_compile_options(ufs-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
 target_link_options(ufs-driver PRIVATE -Wl,-z,defs)
 target_include_directories(ufs-driver PRIVATE

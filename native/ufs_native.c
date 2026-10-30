@@ -322,6 +322,18 @@ int ufs_read_summary(const char *path, LdUfsSummary *summary,
             if ((size_t)count < UFS_DISK_STRUCT_BYTES ||
                 memcmp(window + position, UFS_MAGICS[magic_index].magic, 4U) != 0)
                 continue;
+            /* This shared object owns only one on-disk UFS generation. */
+#if IFS_UFS_MAJOR == 1
+            if (UFS_MAGICS[magic_index].variant != LD_UFS_VARIANT_UFS1_LE &&
+                UFS_MAGICS[magic_index].variant != LD_UFS_VARIANT_UFS1_BE)
+                continue;
+#elif IFS_UFS_MAJOR == 2
+            if (UFS_MAGICS[magic_index].variant != LD_UFS_VARIANT_UFS2_LE &&
+                UFS_MAGICS[magic_index].variant != LD_UFS_VARIANT_UFS2_BE)
+                continue;
+#else
+#error "Filesystem UFS must be built for exactly one on-disk major version"
+#endif
             summary->variant = UFS_MAGICS[magic_index].variant;
             summary->superblock_offset = offset;
             summary->magic_offset = offset + (uint64_t)position;
