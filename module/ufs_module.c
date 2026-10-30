@@ -39,9 +39,7 @@ const IfsUfsVolumeCheckV1 *infiltrator_filesystem_ufs_volume_check_v1(void)
 
 /* Used by the format-neutral Defragmenter worker to select the correct SO. */
 static int accepts_volume(const char *path) {
-    LdUfsSummary summary;
-    char error[256] = {0};
-    return path && ufs_read_summary(path, &summary, error, sizeof(error)) == 0 ? 0 : -1;
+    return path && ufs_probe(path) ? 0 : -1;
 }
 static const IfsUfsProbeV1 probe = {
     IFS_UFS_PROBE_ABI_V1, sizeof(IfsUfsProbeV1), "ufs2", accepts_volume

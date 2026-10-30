@@ -597,10 +597,44 @@ int ufs_analyse_allocation(const char *path, LdUfsAnalysis *analysis,
     return 0;
 }
 
+/* A read-only identity probe is usable before the privileged host
+ * binds its extended I/O services. Deeper geometry verification occurs in
+ * the authoritative worker after the host services are bound. */
 bool ufs_probe(const char *path)
 {
-    LdUfsSummary summary;
-    return ufs_read_summary(path, &summary, NULL, 0U) == 0;
+    if (path == NULL)
+        return false;
+    const int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return false;
+    bool found = false;
+    for (size_t i = 0U;
+         i < sizeof(UFS_CANDIDATES) / sizeof(UFS_CANDIDATES[0]) && !found;
+         ++i) {
+        uint8_t magic[4];
+        const off_t at = (off_t)(UFS_CANDIDATES[i] + UFS_DISK_MAGIC_OFFSET);
+        if (pread(fd, magic, sizeof(magic), at) != (ssize_t)sizeof(magic))
+            continue;
+        for (size_t j = 0U; j < sizeof(UFS_MAGICS) / sizeof(UFS_MAGICS[0]); ++j) {
+#if IFS_UFS_MAJOR == 1
+            if (UFS_MAGICS[j].variant != LD_UFS_VARIANT_UFS1_LE &&
+                UFS_MAGICS[j].variant != LD_UFS_VARIANT_UFS1_BE)
+                continue;
+#elif IFS_UFS_MAJOR == 2
+            if (UFS_MAGICS[j].variant != LD_UFS_VARIANT_UFS2_LE &&
+                UFS_MAGICS[j].variant != LD_UFS_VARIANT_UFS2_BE)
+                continue;
+#else
+#error "A UFS shared object must select exactly one on-disk major version"
+#endif
+            if (memcmp(magic, UFS_MAGICS[j].magic, sizeof(magic)) == 0) {
+                found = true;
+                break;
+            }
+        }
+    }
+    (void)close(fd);
+    return found;
 }
 
 const char *ufs_variant_name(const LdUfsSummary *summary)
