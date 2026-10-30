@@ -1,5 +1,9 @@
-# UFS migration — 2026-10-30
-
-Native UFS analyser/worker source copied without modification from Infiltrator-Projects/Defragmenter commit 30af892d8897d3aeaeefeac1bfcdb9620a0a5c72. This is a **source snapshot**, not a separately functional shared object, kernel module or EFI driver. The worker still depends on Defragmenter's host interfaces; its existing implementation remains active there until a separately tested Common-ABI filesystem module is integrated.
-
-UFS1 and UFS2 remain variants of this one UFS family repository. Test their separate on-disk rules and qualified write limitations before exposing standalone operations.
+# UFS migration status
+The Defragmenter UFS native reader, analyser and relocation worker have
+been brought into the independent UFS.so source tree. Its format-specific
+algorithms run behind a typed entry point, and the generic device, journal,
+Stop and exact-I/O host services remain owned by Defragmenter/Common.
+The UFS module's standalone build and ABI test are required by CI.
+**Not yet an end-to-end UFS Defragmenter migration** until the application
+loader is switched and full disposable-image Defrag/Growth/Recover verification
+has passed. UFS test-media formatting still needs relocation to its driver.

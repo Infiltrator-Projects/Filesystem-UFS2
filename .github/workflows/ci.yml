@@ -1,0 +1,23 @@
+name: UFS independently built shared object
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  ufs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install required native build deps
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential libssl-dev
+      - name: Compile UFS.so with audited authoritative Common
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+          test -f build/UFS.so
+          nm -D build/UFS.so | grep -F infiltrator_filesystem_ufs_v1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UFS-so
+          path: build/UFS.so
