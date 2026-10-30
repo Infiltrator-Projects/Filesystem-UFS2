@@ -9,8 +9,9 @@ static int run(int argc, char **argv, const IfsDefragServicesV1 *services) {
     ifs_unbind_services();
     return result;
 }
+int ifs_ufs_mkfs_main(int argc, char **argv);
 static const IfsUfsModuleV1 api = {
     IFS_UFS_MODULE_V1, sizeof(IfsUfsModuleV1),
-    "ufs", IFS_UFS_CAP_RUN, run
+    "ufs", IFS_UFS_CAP_RUN | IFS_UFS_CAP_TEST_MEDIA, run, ifs_ufs_mkfs_main
 };
 const IfsUfsModuleV1 *infiltrator_filesystem_ufs_v1(void) { return &api; }

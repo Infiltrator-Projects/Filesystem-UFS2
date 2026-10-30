@@ -14,8 +14,10 @@ FetchContent_Declare(infiltratr_common
 FetchContent_MakeAvailable(infiltratr_common)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"1.0.0\"\n")
 add_library(ufs-driver SHARED
- native/ufs_native.c native/ufs_worker.c
+ native/ufs_native.c native/ufs_worker.c fixtures/ufs_mkfs.c
  compat/legacy_services.c compat/runtime_alloc.c module/ufs_module.c)
+set_source_files_properties(fixtures/ufs_mkfs.c PROPERTIES
+ COMPILE_DEFINITIONS "main=ifs_ufs_mkfs_main")
 set_source_files_properties(native/ufs_worker.c PROPERTIES
  COMPILE_DEFINITIONS "main=ifs_ufs_worker_main")
 set_target_properties(ufs-driver PROPERTIES PREFIX "" OUTPUT_NAME "UFS" SUFFIX ".so")
