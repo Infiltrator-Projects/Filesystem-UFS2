@@ -36,3 +36,6 @@ if(BUILD_TESTING)
  add_test(NAME ufs-module-interface COMMAND ufs-module-test)
 endif()
 install(TARGETS ufs-driver LIBRARY DESTINATION /System/Filesystems)
+# Runtime payload: one filesystem shared object and its single PDF manual.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/UFS.pdf"
+        DESTINATION /System/Resources/Documentation/Filesystem-UFS2)
