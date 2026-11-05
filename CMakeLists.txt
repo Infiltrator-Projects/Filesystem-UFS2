@@ -41,4 +41,4 @@ endif()
 install(TARGETS ufs-driver LIBRARY DESTINATION /System/Filesystems)
 # Runtime payload: one filesystem shared object and its single PDF manual.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/docs/UFS.pdf"
-        DESTINATION /System/Resources/Documentation/Filesystem-UFS2)
+        DESTINATION /System/Resources/Documentation RENAME Filesystem-UFS2.pdf)

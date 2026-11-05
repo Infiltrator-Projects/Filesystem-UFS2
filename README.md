@@ -21,7 +21,7 @@ qualification must pass before calling either module fully complete.
 ## Installer files
 
 - `/System/Filesystems/UFS2.so`
-- `/System/Resources/Documentation/Filesystem-UFS2/UFS.pdf`
+- `/System/Resources/Documentation/Filesystem-UFS2.pdf`
 - `/System/Kernel/Filesystems/ufs2.ko`
 
 The published Debian package installs these three regular files. A manual native RUN compiles the shared object and Linux adapter locally, generates the PDF, and replaces all three files. It uses the running kernel headers by default. Use `--kernel-build DIRECTORY` for a prepared kernel build with `Module.symvers`. The kernel module is stored for manual use.
