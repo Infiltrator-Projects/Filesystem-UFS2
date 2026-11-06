@@ -157,7 +157,7 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 553.0 Tm (https://static.usenix.org
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 524.0 Tm (2. Original Berkeley Fast File System design paper) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 495.0 Tm (https://web.eecs.umich.edu/~prabal/teaching/eecs582-w11/readings/mckusick84ffs.pdf) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 466.0 Tm (3. Soft Updates technical paper \(1999\)) Tj ET
-BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 437.0 Tm (https://www.usenix.org/conference/1999-usenix-annual-technical-conference/soft-updates-technique-eliminating-most) Tj ET
+BT /F1 7.7 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 437.0 Tm (https://www.usenix.org/conference/1999-usenix-annual-technical-conference/soft-updates-technique-eliminating-most) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 408.0 Tm (The InfiltratorOS shared-object module, optional kernel adapter, native builder and) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 391.0 Tm (release-specific tests are a separate implementation. A successful document build or) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 374.0 Tm (package installation does not qualify physical writes, recovery, kernel mounting or boot.) Tj ET
