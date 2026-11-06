@@ -1,62 +1,163 @@
-0.06 0.12 0.20 rg 0 744 595 98 re f
-0.02 0.58 0.60 rg 48 741 87 4 re f
-BT /F2 12 Tf 0.65 0.87 0.91 rg 1 0 0 1 48 801 Tm (INFILTRATOR / FILESYSTEMS) Tj ET
-BT /F2 20 Tf 1 1 1 rg 1 0 0 1 48 771 Tm (UFS - format and project guide) Tj ET
-0.94 0.97 0.97 rg 48 674 498 46 re f
-BT /F2 14 Tf 0.02 0.42 0.47 rg 1 0 0 1 61 699 Tm (FILESYSTEM BUILD GUIDE) Tj ET
-BT /F1 10 Tf 0.07 0.14 0.24 rg 1 0 0 1 61 683 Tm (Portable Debian package and locally compiled native installer.) Tj ET
-BT /F2 14 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 642 Tm (WHAT IS IT?) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 49 615 Tm (Unix File System family; exact revision and metadata layout depend on the) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 49 596 Tm (target platform.) Tj ET
-BT /F2 13 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 549 Tm (CONCEPTUAL ON-DISK STRUCTURE) Tj ET
-BT /F1 10 Tf 0.35 0.42 0.47 rg 1 0 0 1 48 526 Tm (Format-specific structures vary; this is not a sector map.) Tj ET
-0.06 0.44 0.49 rg 48 445 116 62 re f
-BT /F2 11 Tf 1 1 1 rg 1 0 0 1 60 478 Tm (MEDIA) Tj ET
-BT /F1 9 Tf 0.9 0.96 0.97 rg 1 0 0 1 60 459 Tm (stage 1) Tj ET
-0.09 0.52 0.56 rg 175 445 116 62 re f
-BT /F2 11 Tf 1 1 1 rg 1 0 0 1 187 478 Tm (METADATA) Tj ET
-BT /F1 9 Tf 0.9 0.96 0.97 rg 1 0 0 1 187 459 Tm (stage 2) Tj ET
-0.12 0.62 0.57 rg 302 445 116 62 re f
-BT /F2 11 Tf 1 1 1 rg 1 0 0 1 314 478 Tm (ALLOCATION) Tj ET
-BT /F1 9 Tf 0.9 0.96 0.97 rg 1 0 0 1 314 459 Tm (stage 3) Tj ET
-0.16 0.42 0.53 rg 429 445 116 62 re f
-BT /F2 11 Tf 1 1 1 rg 1 0 0 1 441 478 Tm (PAYLOAD) Tj ET
-BT /F1 9 Tf 0.9 0.96 0.97 rg 1 0 0 1 441 459 Tm (stage 4) Tj ET
-BT /F2 14 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 406 Tm (SOURCE AND QUALIFICATION) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 49 381 Tm (Filesystem-UFS has an independent Infiltrator-Projects source repository.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 49 362 Tm (The Debian package records the source revision and payload checksums.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 49 343 Tm (Driver capabilities and media compatibility are described in the source) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 49 324 Tm (qualification reports.) Tj ET
-BT /F2 14 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 288 Tm (TARGET INSTALLATION LAYOUT) Tj ET
-0.94 0.97 0.97 rg 48 183 498 86 re f
-BT /F1 10 Tf 0.07 0.14 0.24 rg 1 0 0 1 62 247 Tm (/System/Filesystems/UFS2.so) Tj ET
-BT /F1 10 Tf 0.07 0.14 0.24 rg 1 0 0 1 62 225 Tm (/System/Resources/Documentation/Filesystem-UFS/) Tj ET
-BT /F2 11 Tf 0.02 0.48 0.52 rg 1 0 0 1 62 204 Tm (UFS.pdf) Tj ET
-BT /F1 10 Tf 0.35 0.42 0.47 rg 1 0 0 1 48 149 Tm (The installation page gives the exact packaged file paths.) Tj ET
-BT /F1 10 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 101 Tm (Engineering source and qualification reports belong in GitHub.) Tj ET
-0.82 0.85 0.86 rg 48 61 500 1 re f
-BT /F1 9 Tf 0.34 0.39 0.43 rg 1 0 0 1 48 40 Tm (Filesystem-UFS  |  Preliminary user guide  |  30 October 2026) Tj ET
-
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 01) Tj ET
+BT /F2 12 Tf 0.02 0.50 0.56 rg 1 0 0 1 50 690.0 Tm (HISTORY / ORIGINAL DESIGN / DISK FORMAT) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 655.0 Tm (The 2003-era BSD on-disk evolution for multi-terabyte storage, larger metadata and improved) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 638.0 Tm (timestamp and inode representations.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 609.0 Tm (This is a technical reference to the upstream filesystem's historical design, not an) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 592.0 Tm (installer manual. The format's on-media semantics are distinct from the independent) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 575.0 Tm (InfiltratorOS module, its APIs and any Linux kernel adapter.) Tj ET
+BT /F2 12 Tf 0.02 0.50 0.56 rg 1 0 0 1 50 546.0 Tm (CONCEPTUAL MEDIA MAP) Tj ET
+0.040 0.360 0.470 rg 50 463 239 67 re f
+BT /F2 11 Tf 1 1 1 rg 1 0 0 1 61 495.0 Tm (SUPERBLOCK) Tj ET
+BT /F1 8.5 Tf 0.86 0.96 0.97 rg 1 0 0 1 61 476.0 Tm (Updated geometry and flags) Tj ET
+0.065 0.395 0.495 rg 301 463 239 67 re f
+BT /F2 11 Tf 1 1 1 rg 1 0 0 1 312 495.0 Tm (CYLINDER GROUPS) Tj ET
+BT /F1 8.5 Tf 0.86 0.96 0.97 rg 1 0 0 1 312 476.0 Tm (Familiar BSD locality model) Tj ET
+0.090 0.430 0.520 rg 50 381 239 67 re f
+BT /F2 11 Tf 1 1 1 rg 1 0 0 1 61 413.0 Tm (UFS2 INODES) Tj ET
+BT /F1 8.5 Tf 0.86 0.96 0.97 rg 1 0 0 1 61 394.0 Tm (Larger fields and timestamps) Tj ET
+0.115 0.465 0.545 rg 301 381 239 67 re f
+BT /F2 11 Tf 1 1 1 rg 1 0 0 1 312 413.0 Tm (DATA + XATTR) Tj ET
+BT /F1 8.5 Tf 0.86 0.96 0.97 rg 1 0 0 1 312 394.0 Tm (Files, fragments, extra metadata) Tj ET
+BT /F2 12 Tf 0.02 0.50 0.56 rg 1 0 0 1 50 340.0 Tm (CONTENTS) Tj ET
+BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 313.0 Tm (1. Historical chronology) Tj ET
+BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 290.0 Tm (2. Original on-disk architecture) Tj ET
+BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 267.0 Tm (3. Allocation and directories) Tj ET
+BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 244.0 Tm (4. Integrity and recovery) Tj ET
+BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 221.0 Tm (5. Design rationale and limitations) Tj ET
+BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 198.0 Tm (6. InfiltratorOS integration boundary) Tj ET
 %%Page
-0.06 0.12 0.20 rg 0 744 595 98 re f
-BT /F2 20 Tf 1 1 1 rg 1 0 0 1 48 778 Tm (Build and installation) Tj ET
-BT /F2 14 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 700 Tm (Filesystem-UFS2) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 673 Tm (Release @VERSION@) Tj ET
-BT /F2 13 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 620 Tm (Installed files) Tj ET
-BT /F3 8 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 591 Tm (/System/Filesystems/UFS2.so) Tj ET
-BT /F3 8 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 568 Tm (/System/Resources/Documentation/Filesystem-UFS2.pdf) Tj ET
-BT /F3 8 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 545 Tm (/System/Kernel/Filesystems/ufs2.ko) Tj ET
-BT /F2 13 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 475 Tm (Debian package) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 450 Tm (Install the prebuilt files with dpkg -i followed by the Debian filename.) Tj ET
-BT /F2 13 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 400 Tm (Manual RUN) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 375 Tm (Run bash followed by the native installer filename.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 353 Tm (The installer compiles the shared object and generates this manual locally.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 331 Tm (It also compiles the Linux adapter against the running kernel headers.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 309 Tm (Use --kernel-build DIRECTORY to select another prepared kernel build.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 287 Tm (The manual installer replaces all three files.) Tj ET
-BT /F2 13 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 239 Tm (InfiltratorOS installation) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 214 Tm (The OS installer builds a missing or older shared object.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 192 Tm (It verifies the manual independently and repairs it from its matching release.) Tj ET
-BT /F1 11 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 170 Tm (The kernel module is stored for manual use under its single filename.) Tj ET
-BT /F1 10 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 110 Tm (The package metadata records the source revision and SHA-256 checksums.) Tj ET
-BT /F1 9 Tf 0.07 0.14 0.24 rg 1 0 0 1 48 40 Tm (Filesystem-UFS2 | Build guide | @VERSION@) Tj ET
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 02) Tj ET
+BT /F2 14 Tf 0.01 0.43 0.49 rg 1 0 0 1 50 713.0 Tm (HISTORICAL CHRONOLOGY) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (UFS2 was developed for FreeBSD during the transition to multi-terabyte storage. Marshall) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (Kirk McKusick's BSDCon 2003 paper describes the reasons for a new on-disk format rather) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (than indefinite enlargement of UFS1. It retained the BSD cylinder-group and Fast File) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (System philosophy while changing structures that were becoming too small or too) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 611.0 Tm (restrictive.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (The design introduced wider block pointers, higher-resolution timestamps, extended) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (attributes and a larger boot block area, with modifications to soft updates. It built on) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (decades of BSD storage design rather than attempting to be a ZFS-style pooled copy-on-write) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (filesystem. UFS1 remained an important compatibility format, but UFS2 should be identified) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 514.0 Tm (separately.) Tj ET
+%%Page
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 03) Tj ET
+BT /F2 14 Tf 0.01 0.43 0.49 rg 1 0 0 1 50 713.0 Tm (ORIGINAL ON-DISK ARCHITECTURE) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (UFS2 has a superblock, cylinder groups and inodes analogous in purpose to UFS1, but the) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (on-disk inode structure is different. UFS2 stores larger block addresses and extended) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (metadata, enabling increased file and volume capacities. A valid reader must parse the) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (format version and its exact inode fields instead of casting a UFS1 disk inode to a UFS2) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 611.0 Tm (structure.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (Each cylinder group maintains block/inode allocation metadata and locality information.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (Data blocks can be divided into fragments. Extended attributes may be associated with) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (separately allocated blocks, and their allocation/deallocation dependencies have) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (implications for consistency. Updated timestamp structures and inode metadata were explicit) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 514.0 Tm (design goals.) Tj ET
+%%Page
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 04) Tj ET
+BT /F2 14 Tf 0.01 0.43 0.49 rg 1 0 0 1 50 713.0 Tm (ALLOCATION AND DIRECTORIES) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (Cylinder-group placement strategies aim to keep related data near its inode and disperse) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (directories sufficiently for balance. Bitmaps and summary counts permit efficient) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (free-space selection. Direct and indirect block pointers map the file into allocated) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (storage. As with UFS1, the exact algorithm used by the operating system is a policy layered) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 611.0 Tm (on the persistent format.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (Directory entries carry inode references, record lengths and names. Hard links, ownership,) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (permissions and other Unix behaviour require consistent inode metadata. UFS2's metadata) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (structures support extended attributes, and directory or inode corruption must be handled) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (with format-specific bounds and revision awareness.) Tj ET
+%%Page
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 05) Tj ET
+BT /F2 14 Tf 0.01 0.43 0.49 rg 1 0 0 1 50 713.0 Tm (INTEGRITY AND RECOVERY) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (UFS2 participates in BSD's soft-updates model, which tracks write dependencies and enforces) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (an order that avoids certain inconsistent allocation states without requiring every) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (metadata write to be synchronous. Soft updates do not journal all file data. Some) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (deployments may use a journaled variant or soft-updates journalling, but the presence and) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 611.0 Tm (policy must be discovered rather than assumed.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (The 2003 engineering work addressed extended attribute dependencies, cleaner free-space) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (accounting and scalable recovery operations. Offline fsck remains important when metadata) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (is damaged. A modern repair tool checks group data, ownership maps, extended metadata and) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (directory connectivity instead of treating a consistent superblock as a complete audit.) Tj ET
+%%Page
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 06) Tj ET
+BT /F2 14 Tf 0.01 0.43 0.49 rg 1 0 0 1 50 713.0 Tm (DESIGN RATIONALE AND LIMITATIONS) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (UFS2 deliberately preserves familiar BSD Fast File System allocation strategies while) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (expanding the representable disk geometry and inode capabilities. It balances proven) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (locality-based design and backward-looking operational experience with the demands of much) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (larger storage systems.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 599.0 Tm (It is not interchangeable with UFS1. Neither should be described as having inherent) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (ZFS-style snapshots, checksums or transactional copy-on-write. Filesystem features, write) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (durability and repair behaviour depend on precise FreeBSD implementations and mounted) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (options.) Tj ET
+%%Page
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 07) Tj ET
+BT /F2 14 Tf 0.01 0.43 0.49 rg 1 0 0 1 50 713.0 Tm (INFILTRATOROS INTEGRATION BOUNDARY) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (UFS2.so must be tested against independently formatted UFS2 media. Shared source with UFS1) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (is an implementation convenience, not evidence that both disks can be parsed identically.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (Validate superblock identity, inode format and endianness before claiming read or write) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (support.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 599.0 Tm (Our release package, optional `.ko` and filesystem documentation are independent) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (deliverables. The original BSDCon paper remains the primary rationale for UFS2's on-disk) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (architectural changes.) Tj ET
+%%Page
+0.06 0.13 0.22 rg 0 750 595 92 re f
+0.03 0.53 0.58 rg 50 747 120 4 re f
+0.7 0.8 0.85 RG 0.7 w 50 50 m 545 50 l S
+BT /F2 9 Tf 0.60 0.85 0.90 rg 1 0 0 1 50 803.0 Tm (INFILTRATOR / ORIGINAL FILESYSTEM TECHNICAL REFERENCE) Tj ET
+BT /F2 19 Tf 1 1 1 rg 1 0 0 1 50 774.0 Tm (UFS2 - BSD Fast File System successor) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 50 34.0 Tm (Filesystem-UFS2 | Format history, physical design and references) Tj ET
+BT /F1 8 Tf 0.33 0.40 0.44 rg 1 0 0 1 509 34.0 Tm (PAGE 08) Tj ET
+BT /F2 14 Tf 0.01 0.43 0.49 rg 1 0 0 1 50 713.0 Tm (SOURCES AND PRIMARY REFERENCES) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (The documents below are the historical and engineering reference points used for this) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (guide. Where an on-media field or feature flag is ambiguous, consult the original format) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (documentation and its version-specific implementation notes before interpreting or changing) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (media.) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 599.0 Tm (1. McKusick, Enhancements to the Fast Filesystem to Support Multi-Terabyte Storage Systems) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (\(2003\)) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 553.0 Tm (https://static.usenix.org/events/bsdcon03/tech/full_papers/mckusick/mckusick_html/index.html) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 524.0 Tm (2. Original Berkeley Fast File System design paper) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 495.0 Tm (https://web.eecs.umich.edu/~prabal/teaching/eecs582-w11/readings/mckusick84ffs.pdf) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 466.0 Tm (3. Soft Updates technical paper \(1999\)) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 437.0 Tm (https://www.usenix.org/conference/1999-usenix-annual-technical-conference/soft-updates-technique-eliminating-most) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 408.0 Tm (The InfiltratorOS shared-object module, optional kernel adapter, native builder and) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 391.0 Tm (release-specific tests are a separate implementation. A successful document build or) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 374.0 Tm (package installation does not qualify physical writes, recovery, kernel mounting or boot.) Tj ET
