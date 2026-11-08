@@ -281,7 +281,9 @@ static int ufs_rename(struct mnt_idmap *idmap, struct inode *old_dir,
 		new_de = ufs_find_entry(new_dir, &new_dentry->d_name, &new_folio);
 		if (!new_de)
 			goto out_dir;
-		ufs_set_link(new_dir, new_de, new_folio, old_inode, 1);
+		err = ufs_set_link(new_dir, new_de, new_folio, old_inode, 1);
+		if (err)
+			goto out_dir;
 		inode_set_ctime_current(new_inode);
 		if (dir_de)
 			drop_nlink(new_inode);
@@ -300,14 +302,26 @@ static int ufs_rename(struct mnt_idmap *idmap, struct inode *old_dir,
 	 */
 	inode_set_ctime_current(old_inode);
 
-	ufs_delete_entry(old_dir, old_de, old_folio);
+	/*
+	 * ufs_delete_entry() consumes the mapped old folio even on error.
+	 * Do not fall through to out_old and release it a second time.
+	 */
+	err = ufs_delete_entry(old_dir, old_de, old_folio);
+	if (err) {
+		if (dir_de)
+			folio_release_kmap(dir_folio, dir_de);
+		return err;
+	}
 	mark_inode_dirty(old_inode);
 
 	if (dir_de) {
-		if (old_dir != new_dir)
-			ufs_set_link(old_inode, dir_de, dir_folio, new_dir, 0);
-		else
+		if (old_dir != new_dir) {
+			err = ufs_set_link(old_inode, dir_de, dir_folio, new_dir, 0);
+			if (err)
+				return err;
+		} else {
 			folio_release_kmap(dir_folio, dir_de);
+		}
 		inode_dec_link_count(old_dir);
 	}
 	return 0;

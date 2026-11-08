@@ -82,7 +82,7 @@ ino_t ufs_inode_by_name(struct inode *dir, const struct qstr *qstr)
 
 
 /* Releases the page */
-void ufs_set_link(struct inode *dir, struct ufs_dir_entry *de,
+int ufs_set_link(struct inode *dir, struct ufs_dir_entry *de,
 		  struct folio *folio, struct inode *inode,
 		  bool update_times)
 {
@@ -92,7 +92,11 @@ void ufs_set_link(struct inode *dir, struct ufs_dir_entry *de,
 
 	folio_lock(folio);
 	err = ufs_prepare_chunk(folio, pos, len);
-	BUG_ON(err);
+	if (unlikely(err)) {
+		folio_unlock(folio);
+		folio_release_kmap(folio, de);
+		return err;
+	}
 
 	de->d_ino = cpu_to_fs32(dir->i_sb, inode->i_ino);
 	ufs_set_de_type(dir->i_sb, de, inode->i_mode);
@@ -102,7 +106,7 @@ void ufs_set_link(struct inode *dir, struct ufs_dir_entry *de,
 	if (update_times)
 		inode_set_mtime_to_ts(dir, inode_set_ctime_current(dir));
 	mark_inode_dirty(dir);
-	ufs_handle_dirsync(dir);
+	return ufs_handle_dirsync(dir);
 }
 
 static bool ufs_check_folio(struct folio *folio, char *kaddr)
@@ -516,7 +520,10 @@ int ufs_delete_entry(struct inode *inode, struct ufs_dir_entry *dir,
 	pos = folio_pos(folio) + from;
 	folio_lock(folio);
 	err = ufs_prepare_chunk(folio, pos, to - from);
-	BUG_ON(err);
+	if (unlikely(err)) {
+		folio_unlock(folio);
+		goto out;
+	}
 	if (pde)
 		pde->d_reclen = cpu_to_fs16(sb, to - from);
 	dir->d_ino = 0;
