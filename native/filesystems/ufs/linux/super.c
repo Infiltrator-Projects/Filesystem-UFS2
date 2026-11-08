@@ -824,14 +824,18 @@ static int ufs_fill_super(struct super_block *sb, void *data, int silent)
 		pr_err("wrong mount options\n");
 		goto failed;
 	}
+	/*
+	 * This independent driver owns UFS2 only.  The generic ufs driver
+	 * remains responsible for older and vendor-specific UFS variants.
+	 * An absent type selects UFS2; a conflicting explicit type fails.
+	 */
 	if (!(sbi->s_mount_opt & UFS_MOUNT_UFSTYPE)) {
+		ufs_set_opt(sbi->s_mount_opt, UFSTYPE_UFS2);
+	} else if ((sbi->s_mount_opt & UFS_MOUNT_UFSTYPE) !=
+		   UFS_MOUNT_UFSTYPE_UFS2) {
 		if (!silent)
-			pr_err("You didn't specify the type of your ufs filesystem\n\n"
-			"mount -t ufs -o ufstype="
-			"sun|sunx86|44bsd|ufs2|5xbsd|old|hp|nextstep|nextstep-cd|openstep ...\n\n"
-			">>>WARNING<<< Wrong ufstype may corrupt your filesystem, "
-			"default is ufstype=old\n");
-		ufs_set_opt (sbi->s_mount_opt, UFSTYPE_OLD);
+			pr_err("ufs2: rejecting non-UFS2 mount type\n");
+		goto failed;
 	}
 
 	uspi = kzalloc(sizeof(struct ufs_sb_private_info), GFP_KERNEL);
@@ -1060,6 +1064,16 @@ again:
 	goto failed;
 
 magic_found:
+	/*
+	 * The UFS2 on-disk magic must match the independently selected
+	 * filesystem.  Do not reinterpret a UFS1 superblock using UFS2
+	 * geometry, even if the caller supplied ufstype=ufs2.
+	 */
+	if (uspi->fs_magic != UFS2_MAGIC) {
+		if (!silent)
+			pr_err("ufs2: rejecting non-UFS2 superblock magic\n");
+		goto failed;
+	}
 	/*
 	 * Check block and fragment sizes
 	 */
@@ -1468,7 +1482,7 @@ static void init_once(void *foo)
 
 static int __init init_inodecache(void)
 {
-	ufs_inode_cachep = kmem_cache_create_usercopy("ufs_inode_cache",
+	ufs_inode_cachep = kmem_cache_create_usercopy("ufs2_inode_cache",
 				sizeof(struct ufs_inode_info), 0,
 				(SLAB_RECLAIM_ACCOUNT | SLAB_ACCOUNT),
 				offsetof(struct ufs_inode_info, i_u1.i_symlink),
@@ -1510,12 +1524,12 @@ static struct dentry *ufs_mount(struct file_system_type *fs_type,
 
 static struct file_system_type ufs_fs_type = {
 	.owner		= THIS_MODULE,
-	.name		= "ufs",
+	.name		= "ufs2",
 	.mount		= ufs_mount,
 	.kill_sb	= kill_block_super,
 	.fs_flags	= FS_REQUIRES_DEV,
 };
-MODULE_ALIAS_FS("ufs");
+MODULE_ALIAS_FS("ufs2");
 
 static int __init init_ufs_fs(void)
 {
@@ -1540,5 +1554,5 @@ static void __exit exit_ufs_fs(void)
 
 module_init(init_ufs_fs)
 module_exit(exit_ufs_fs)
-MODULE_DESCRIPTION("UFS Filesystem");
+MODULE_DESCRIPTION("Independent UFS2 Filesystem");
 MODULE_LICENSE("GPL");

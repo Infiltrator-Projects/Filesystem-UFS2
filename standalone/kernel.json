@@ -1,5 +1,5 @@
 {
-  "name": "ufs",
+  "name": "ufs2",
   "directory": "native/filesystems/ufs/linux",
   "paths": [
     "native/filesystems/ufs"
