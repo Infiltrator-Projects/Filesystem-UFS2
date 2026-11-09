@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
-project(FilesystemUFS2 VERSION 1.0.0 LANGUAGES C)
+# VERSION is the single source of truth for the package and runtime worker.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" UFS2_VERSION LIMIT_COUNT 1)
+if(NOT UFS2_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+  message(FATAL_ERROR "VERSION must contain a semantic version (major.minor.patch)")
+endif()
+project(FilesystemUFS2 VERSION ${UFS2_VERSION} LANGUAGES C)
 include(CTest)
 include(FetchContent)
 find_package(OpenSSL REQUIRED)
@@ -15,7 +20,7 @@ FetchContent_MakeAvailable(infiltratr_common)
 # Common is a link-time dependency; its development files must not be installed
 # by this standalone filesystem package.
 set_property(DIRECTORY "${infiltratr_common_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"1.0.0\"\n")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"${PROJECT_VERSION}\"\n")
 add_library(ufs-driver SHARED
  native/ufs_native.c native/ufs_worker.c fixtures/ufs_mkfs.c
  compat/legacy_services.c compat/runtime_alloc.c
