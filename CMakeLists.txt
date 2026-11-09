@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 # VERSION is the single source of truth for the package and runtime worker.
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" UFS2_VERSION LIMIT_COUNT 1)
-if(NOT UFS2_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+if(NOT UFS2_VERSION MATCHES "^[0-9]+[.][0-9]+[.][0-9]+$")
   message(FATAL_ERROR "VERSION must contain a semantic version (major.minor.patch)")
 endif()
 project(FilesystemUFS2 VERSION ${UFS2_VERSION} LANGUAGES C)
