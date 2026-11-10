@@ -39,7 +39,9 @@ target_include_directories(ufs-driver PRIVATE
 target_link_libraries(ufs-driver PRIVATE InfiltratrCommon::Common OpenSSL::Crypto)
 if(BUILD_TESTING)
  add_executable(ufs-module-test tests/test_module.c)
- target_include_directories(ufs-module-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat")
+ target_include_directories(ufs-module-test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native")
  target_link_libraries(ufs-module-test PRIVATE ufs-driver)
  add_test(NAME ufs-module-interface COMMAND ufs-module-test)
 endif()
