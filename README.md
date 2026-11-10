@@ -40,3 +40,21 @@ Both UFS2 endianness variants are recognised in this Common V2 phase.
 Mount, file operations, formatting, repair, defragmentation, and kernel or EFI
 execution are **not** yet exported through the Common V2 groups. The
 format-specific legacy interfaces remain for existing qualified consumers.
+
+## Native build and release
+
+UFS2 uses **C, C++17 and native shell** for independent package building,
+the PDF reference, two-pass PGO, kernel adapter compilation and release
+qualification. There are no Python scripts in the standalone toolchain.
+
+`bash standalone/release.sh release` creates exactly one portable
+Debian package and one source-embedded native installer RUN. The RUN
+verifies its payload hash before extracting and compiling locally.
+`bash standalone/release.sh install --profile aggressive --build-only --output DIRECTORY --system-package-mode`
+qualifies a hardware-specific package without modifying installed
+system files. `--kernel-build DIRECTORY` requires an externally
+prepared kernel build with `Module.symvers`.
+
+The installed module remains Common ABI V2. The older per-format
+Defragmenter entry points are not a V2 operation group and are still
+tracked for replacement rather than misrepresented as native V2.
