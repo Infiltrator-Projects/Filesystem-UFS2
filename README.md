@@ -2,8 +2,8 @@
 
 Independent UFS2 on-disk filesystem driver for InfiltratorOS, descended from
 the original Filesystem-UFS repository. The native decoder recognises UFS2
-little- and big-endian volumes; current Common V2 discovery deliberately
-advertises only its qualified little-endian variant. UFS1 belongs to [Filesystem-UFS1](https://github.com/Infiltrator-Projects/Filesystem-UFS1).
+little- and big-endian volumes. Common V2 discovery covers both
+variants using the format-owned read-only decoder. UFS1 belongs to [Filesystem-UFS1](https://github.com/Infiltrator-Projects/Filesystem-UFS1).
 
 `UFS2.so` owns the UFS2 parser, analyser, staged Defrag/Growth Defrag,
 Recover, first-party UFS2 Test Media formatter, validation and raw payload
@@ -11,9 +11,11 @@ verification. It installs to `/System/Filesystems/UFS2.so`.
 
 `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build && ctest --test-dir build --output-on-failure`
 
-The V1 symbol names describe compatibility of the *software API*, not the
-on-disk UFS generation. UFS1 and UFS2 may share a historical C source
-lineage, but are now separately identified, built and installed.
+UFS1 and UFS2 are separately identified, built and installed. The
+package's required filesystem entry point is the Common V2 API.
+Legacy per-format V1 exports are not part of the target architecture and
+must be retired after their caller functionality has a qualified native V2
+implementation, not silently retained as the long-term interface.
 
 **Qualification:** acceptance/rejection tests exercise on-disk magic and the
 existing UFS2 Test Media suite. Independent real-media and recovery
@@ -34,7 +36,7 @@ InfiltratorOS calls `--system-package-mode` and decides which outputs need updat
 `UFS2.so` exports the native `infiltrator_filesystem_api_v2` descriptor
 with `base_v1 == NULL` and a real CORE probe over partition-relative Common
 host I/O. It does not open devices or execute any mutation while probing.
-Only UFS2 little-endian media is advertised for this Common V2 phase.
+Both UFS2 endianness variants are recognised in this Common V2 phase.
 Mount, file operations, formatting, repair, defragmentation, and kernel or EFI
 execution are **not** yet exported through the Common V2 groups. The
 format-specific legacy interfaces remain for existing qualified consumers.
