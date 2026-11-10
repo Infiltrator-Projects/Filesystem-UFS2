@@ -12,6 +12,15 @@ extern const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void);
 #include <string.h>
 #include <unistd.h>
 
+static int host_read_failure(void *context, uint64_t offset, void *buffer, uint32_t bytes)
+{
+    (void)context;
+    (void)offset;
+    (void)buffer;
+    (void)bytes;
+    return IFS_FS_IO_ERROR;
+}
+
 static int host_read(void *context, uint64_t offset, void *buffer, uint32_t bytes)
 {
     const int fd = *(const int *)context;
@@ -59,6 +68,7 @@ int main(void) {
  if (fd < 0) return 5;
  const unsigned char one[4] = {0x54, 0x19, 0x01, 0x00};
  const unsigned char two[4] = {0x19, 0x01, 0x54, 0x19};
+ const unsigned char two_big[4] = {0x19, 0x54, 0x01, 0x19};
  const off_t magic = 8192 + 1372;
  int good = ftruncate(fd, 65536) == 0 &&
      pwrite(fd, two, sizeof(two), magic) == (ssize_t)sizeof(two) &&
@@ -91,6 +101,10 @@ int main(void) {
      good = 0;
  int v2_good = core->probe(&host, &variant) == IFS_FS_OK &&
      variant == LD_UFS_VARIANT_UFS2_LE;
+ if (pwrite(fd, two_big, sizeof(two_big), magic) != (ssize_t)sizeof(two_big) ||
+     core->probe(&host, &variant) != IFS_FS_OK ||
+     variant != LD_UFS_VARIANT_UFS2_BE)
+     v2_good = 0;
  if (pwrite(fd, one, sizeof(one), magic) != (ssize_t)sizeof(one))
      v2_good = 0;
  if (core->probe(&host, &variant) != IFS_FS_NOT_FOUND)
@@ -98,6 +112,10 @@ int main(void) {
  IfsFsHostRuntimeV2 invalid_host = host;
  invalid_host.read_at = NULL;
  if (core->probe(&invalid_host, &variant) != IFS_FS_INVALID)
+     v2_good = 0;
+ invalid_host = host;
+ invalid_host.read_at = host_read_failure;
+ if (core->probe(&invalid_host, &variant) != IFS_FS_IO_ERROR)
      v2_good = 0;
  close(fd);
  unlink(image);
