@@ -14,7 +14,7 @@ while (($#)); do
   esac
 done
 [[ "$profile" == portable || "$profile" == aggressive ]] || usage
-root=$(CDPATH='' cd -- "$(dirname -- "\${BASH_SOURCE[0]}")/.." && pwd)
+root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 for cmd in jq dpkg-deb readelf nm sha256sum; do
   command -v "$cmd" >/dev/null || { echo "Missing build prerequisite: $cmd" >&2; exit 1; }
 done
@@ -31,7 +31,7 @@ else
   revision=$(git -C "$root" rev-parse HEAD)
 fi
 [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid source revision' >&2; exit 1; }
-[[ "$(dpkg-deb -f "$package" Package)" == "infiltrator-\${repo,,}" &&
+[[ "$(dpkg-deb -f "$package" Package)" == "infiltrator-${repo,,}" &&
    "$(dpkg-deb -f "$package" Architecture)" == amd64 &&
    "$(dpkg-deb -f "$package" X-Infiltrator-Native-Profile)" == "$profile" &&
    "$(dpkg-deb -f "$package" X-Infiltrator-Source-Revision)" == "$revision" ]] || {
@@ -69,7 +69,7 @@ done < <(readelf -d "$so" | sed -nE 's/.*\(NEEDED\).*Shared library: \[([^]]+)\]
 expected=("System/Filesystems/$module" "System/Resources/Documentation/$repo.pdf")
 if [[ -n "$kernel_release" ]]; then
   [[ "$kernel_release" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || usage
-  id=\${repo#Filesystem-}; id=\${id,,}
+  id=${repo#Filesystem-}; id=${id,,}
   ko="$work/System/Kernel/Filesystems/$id.ko"
   [[ -f "$ko" && ! -L "$ko" ]] || { echo 'Missing kernel adapter' >&2; exit 1; }
   readelf -h "$ko" | grep -Fq 'REL (Relocatable file)' || {
@@ -92,8 +92,8 @@ if [[ -n "$kernel_release" ]]; then
   expected+=("System/Kernel/Filesystems/$id.ko")
 fi
 mapfile -t actual < <(find "$work" \( -type f -o -type l \) -printf '%P\n' | LC_ALL=C sort)
-mapfile -t known < <(printf '%s\n' "\${expected[@]}" | LC_ALL=C sort)
-[[ "\${actual[*]}" == "\${known[*]}" ]] || {
+mapfile -t known < <(printf '%s\n' "${expected[@]}" | LC_ALL=C sort)
+[[ "${actual[*]}" == "${known[*]}" ]] || {
   echo 'Unexpected or missing filesystem package payload' >&2; exit 1;
 }
 echo "FILESYSTEM-PACKAGE-CONTENTS-PASS $repo $profile"
