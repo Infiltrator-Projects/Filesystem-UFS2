@@ -3,6 +3,7 @@
 #include "ifs_ufs_probe_v1.h"
 #include "ifs_ufs_volume_check_v1.h"
 #include "ifs_ufs_payload_verifier_v1.h"
+#include "ufs_native.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,6 +84,9 @@ int main(void) {
      .release = host_release
  };
  uint32_t variant = 0U;
+ /* Restore the UFS2 magic: the legacy rejection check above wrote UFS1. */
+ if (pwrite(fd, two, sizeof(two), magic) != (ssize_t)sizeof(two))
+     good = 0;
  int v2_good = core->probe(&host, &variant) == IFS_FS_OK &&
      variant == LD_UFS_VARIANT_UFS2_LE;
  if (pwrite(fd, one, sizeof(one), magic) != (ssize_t)sizeof(one))
