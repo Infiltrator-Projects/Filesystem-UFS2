@@ -16,7 +16,8 @@ jobs:
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
           test -f build/UFS2.so
-          nm -D --defined-only build/UFS2.so | grep -F infiltrator_filesystem_api_v2
+          nm -D --defined-only build/UFS2.so | grep -F 'infiltrator_filesystem_api_v2'
+          ! nm -D --defined-only build/UFS2.so | grep -E 'infiltrator_filesystem_.*_v1'
       - uses: actions/upload-artifact@v4
         with:
           name: UFS2-so
