@@ -42,7 +42,7 @@ if(BUILD_TESTING)
  target_include_directories(ufs-module-test PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
   "${CMAKE_CURRENT_SOURCE_DIR}/native")
- target_link_libraries(ufs-module-test PRIVATE ufs-driver)
+ target_link_libraries(ufs-module-test PRIVATE ufs-driver InfiltratrCommon::Common)
  add_test(NAME ufs-module-interface COMMAND ufs-module-test)
 endif()
 install(TARGETS ufs-driver LIBRARY DESTINATION /System/Filesystems)
