@@ -1,0 +1,38 @@
+# Reviewed migration retirement; no archive tags or V1 restoration.
+name: Retire reviewed superseded branches
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/retire-reviewed-branches.yml']
+permissions:
+  contents: write
+jobs:
+  retire:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Remove only explicitly reviewed immutable branch tips
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS='|' read -r branch expected; do
+            [ -n "$branch" ] || continue
+            current="$(gh api "repos/$REPO/git/ref/heads/$branch" --jq '.object.sha' 2>/dev/null || true)"
+            if [ "$current" != "$expected" ]; then
+              if [ -n "$current" ]; then echo "::error::Branch moved: $branch"; exit 1; fi
+              continue
+            fi
+            gh api --method DELETE "repos/$REPO/git/refs/heads/$branch"
+            printf 'Retired reviewed branch: %s\n' "$branch"
+          done <<'REVIEWED_BRANCHES'
+          hal/code-hardening-20261110|565e90ef19eff647dcd03b84fce51defb612bec4
+          hal/native-common-v2-20261110|77c81ca5c03fa46e1ec54227f6a5689f6e89f007
+          hal/native-ufs2-package-checks-20261110|319b5243d6106f6771dbfec5888fa080828f83d1
+          hal/native-ufs2-qa-20261110|d86a7fce642ddf79a80df9af16dbfd3219c63acf
+          hal/strict-v2-release-probe-20261110|e102d994af5b8313ef5ea44af900b71cfdac81d3
+          hal/strict-v2-ufs2-20261110|464d5bd80f862c4a72e9c8a441fd229bc4b67a28
+          hal/ufs2-native-full-20261110|fcee10b3053f34f307dae62809c692d8ffe346a1
+          hal/ufs2-native-rebased-20261110|75ebd39db4cbde329596b9303b5477cb17f5b875
+          REVIEWED_BRANCHES
