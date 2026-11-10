@@ -4,6 +4,8 @@
 #include "ifs_ufs_volume_check_v1.h"
 #include "ifs_ufs_payload_verifier_v1.h"
 #include "ufs_native.h"
+/* Common exports a lookup symbol, not a linker-visible prototype. */
+extern const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void);
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
