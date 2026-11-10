@@ -365,6 +365,86 @@ int ufs_read_summary(const char *path, LdUfsSummary *summary,
     return 0;
 }
 
+
+/*
+ * Common V2 CORE uses the format-owned UFS decoder, with I/O supplied
+ * exclusively by the host. Never open a path, mutate a volume or trust
+ * metadata passed by a caller. Probe reads partition-relative blocks only.
+ */
+int ufs_read_summary_host_v2(const IfsFsHostRuntimeV2 *host,
+                             LdUfsSummary *summary)
+{
+    uint8_t window[UFS_WINDOW_BYTES];
+    bool had_read_error = false;
+    uint32_t sector, max_chunk;
+
+    if (summary == NULL || !ifs_fs_host_v2_valid(host))
+        return IFS_FS_INVALID;
+    memset(summary, 0, sizeof(*summary));
+    sector = host->logical_sector_bytes;
+    if (sector > UFS_WINDOW_BYTES)
+        return IFS_FS_UNSUPPORTED;
+    max_chunk = (host->maximum_transfer_bytes / sector) * sector;
+    if (max_chunk == 0U)
+        return IFS_FS_INVALID;
+
+    for (size_t candidate = 0U;
+         candidate < sizeof(UFS_CANDIDATES) / sizeof(UFS_CANDIDATES[0]);
+         ++candidate) {
+        const uint64_t offset = UFS_CANDIDATES[candidate];
+        uint32_t count, done;
+        if ((offset % sector) != 0U || offset >= host->volume_bytes ||
+            host->volume_bytes - offset < UFS_DISK_STRUCT_BYTES)
+            continue;
+
+        const uint64_t available = host->volume_bytes - offset;
+        count = available >= UFS_WINDOW_BYTES
+            ? UFS_WINDOW_BYTES
+            : ((uint32_t)available / sector) * sector;
+        if (count < UFS_DISK_STRUCT_BYTES)
+            continue;
+        for (done = 0U; done < count;) {
+            const uint32_t left = count - done;
+            const uint32_t chunk = left < max_chunk ? left : max_chunk;
+            if (host->read_at(host->context, offset + done,
+                              window + done, chunk) != IFS_FS_OK) {
+                had_read_error = true;
+                break;
+            }
+            done += chunk;
+        }
+        if (done != count)
+            continue;
+
+        for (size_t index = 0U;
+             index < sizeof(UFS_MAGICS) / sizeof(UFS_MAGICS[0]);
+             ++index) {
+            const LdUfsVariant variant = UFS_MAGICS[index].variant;
+            if (memcmp(window + UFS_DISK_MAGIC_OFFSET,
+                       UFS_MAGICS[index].magic, 4U) != 0)
+                continue;
+#if IFS_UFS_MAJOR == 2
+            if (variant != LD_UFS_VARIANT_UFS2_LE &&
+                variant != LD_UFS_VARIANT_UFS2_BE)
+                continue;
+#elif IFS_UFS_MAJOR == 1
+            if (variant != LD_UFS_VARIANT_UFS1_LE &&
+                variant != LD_UFS_VARIANT_UFS1_BE)
+                continue;
+#else
+#error "UFS probe needs one on-disk major version"
+#endif
+            summary->variant = variant;
+            summary->superblock_offset = offset;
+            summary->magic_offset = offset + UFS_DISK_MAGIC_OFFSET;
+            decode_ufs_allocation(window, count, UFS_DISK_MAGIC_OFFSET,
+                                  summary);
+            return IFS_FS_OK;
+        }
+    }
+    return had_read_error ? IFS_FS_IO_ERROR : IFS_FS_NOT_FOUND;
+}
+
 static void init_cells(LdUfsMapCell *cells, uint64_t cell_count,
                        uint64_t total_units, uint64_t filesystem_units)
 {

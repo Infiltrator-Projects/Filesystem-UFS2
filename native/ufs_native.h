@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <infiltratr/filesystem_module_v2.h>
 
 typedef enum {
     LD_UFS_VARIANT_UFS1_LE = 1,
@@ -71,6 +72,9 @@ typedef struct {
     uint64_t directory_count;
 } LdUfsMapCell;
 
+/* Strictly read-only, partition-relative Common V2 host backend. */
+int ufs_read_summary_host_v2(const IfsFsHostRuntimeV2 *host,
+                             LdUfsSummary *summary);
 int ufs_read_summary(const char *path, LdUfsSummary *summary,
                      char *error, size_t error_size);
 int ufs_analyse_allocation(const char *path, LdUfsAnalysis *analysis,

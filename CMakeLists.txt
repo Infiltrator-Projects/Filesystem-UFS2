@@ -15,7 +15,7 @@ set(INFILTRATR_COMMON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(INFILTRATR_COMMON_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(infiltratr_common
  GIT_REPOSITORY https://github.com/Infiltrator-Projects/Libraries.git
- GIT_TAG c76ec95ef66fc728df6a906ad75a6a4dd63b419b)
+ GIT_TAG c73648ac55a8ca83199d46a24b6ec8ebb0b27b09)
 FetchContent_MakeAvailable(infiltratr_common)
 # Common is a link-time dependency; its development files must not be installed
 # by this standalone filesystem package.
@@ -39,8 +39,10 @@ target_include_directories(ufs-driver PRIVATE
 target_link_libraries(ufs-driver PRIVATE InfiltratrCommon::Common OpenSSL::Crypto)
 if(BUILD_TESTING)
  add_executable(ufs-module-test tests/test_module.c)
- target_include_directories(ufs-module-test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat")
- target_link_libraries(ufs-module-test PRIVATE ufs-driver)
+ target_include_directories(ufs-module-test PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native")
+ target_link_libraries(ufs-module-test PRIVATE ufs-driver InfiltratrCommon::Common)
  add_test(NAME ufs-module-interface COMMAND ufs-module-test)
 endif()
 install(TARGETS ufs-driver LIBRARY DESTINATION /System/Filesystems)
