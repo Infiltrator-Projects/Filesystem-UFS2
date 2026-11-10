@@ -1,8 +1,9 @@
 # Filesystem-UFS2 — UFS2.so
 
 Independent UFS2 on-disk filesystem driver for InfiltratorOS, descended from
-the original Filesystem-UFS repository. Only UFS2 little- and big-endian
-volumes are accepted; UFS1 belongs to [Filesystem-UFS1](https://github.com/Infiltrator-Projects/Filesystem-UFS1).
+the original Filesystem-UFS repository. The native decoder recognises UFS2
+little- and big-endian volumes; current Common V2 discovery deliberately
+advertises only its qualified little-endian variant. UFS1 belongs to [Filesystem-UFS1](https://github.com/Infiltrator-Projects/Filesystem-UFS1).
 
 `UFS2.so` owns the UFS2 parser, analyser, staged Defrag/Growth Defrag,
 Recover, first-party UFS2 Test Media formatter, validation and raw payload
