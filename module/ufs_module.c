@@ -75,7 +75,8 @@ static int common_v2_probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
     result = ufs_read_summary_host_v2(host, &summary);
     if (result != IFS_FS_OK)
         return result;
-    if (summary.variant != LD_UFS_VARIANT_UFS2_LE)
+    if (summary.variant != LD_UFS_VARIANT_UFS2_LE &&
+        summary.variant != LD_UFS_VARIANT_UFS2_BE)
         return IFS_FS_NOT_FOUND;
     *variant = (uint32_t)summary.variant;
     return IFS_FS_OK;
