@@ -112,3 +112,111 @@ build_deb() {
     bash standalone/check-package.sh "$destination" --profile "$profile" --kernel-release "$krel"
   else bash standalone/check-package.sh "$destination" --profile "$profile"; fi
 }
+make_run() {
+  local destination=$1 archive="$work/source.tar.gz"
+  mkdir -p "$work/source"
+  git -C "$root" rev-parse --git-dir >/dev/null || { echo 'Release needs a Git checkout' >&2; return 1; }
+  git ls-files -z | while IFS= read -r -d '' member; do
+    [[ $member == docs/UFS.pdf ]] && continue
+    [[ -f $member && ! -L $member ]] || { echo "Invalid source archive member: $member" >&2; exit 1; }
+    mkdir -p "$work/source/$(dirname "$member")"
+    cp -- "$member" "$work/source/$member"
+  done
+  printf '%s\n' "$(revision)" > "$work/source/SOURCE-REVISION"
+  tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
+    -czf "$archive" -C "$work/source" .
+  local digest
+  digest=$(sha256sum "$archive" | cut -d' ' -f1)
+  sed "s/@PAYLOAD_SHA256@/$digest/g" standalone/run-header.sh > "$destination"
+  cat "$archive" >> "$destination"
+  chmod 0755 "$destination"
+}
+release() {
+  check_tools release
+  mkdir -p dist
+  test -z "$(find dist -mindepth 1 -maxdepth 1 -print -quit)" || {
+    echo 'Refusing to mix release artifacts' >&2; exit 1;
+  }
+  build_deb portable "dist/$package"_"$version"_amd64.deb ''
+  make_run "dist/filesystem-ufs2-$version-native-installer.run"
+  test "$(find dist -maxdepth 1 -type f | wc -l)" = 2
+}
+bundle_kernel() {
+  (($# == 3)) || { echo 'bundle-kernel PACKAGE KERNEL OUTPUT' >&2; exit 2; }
+  local input=$1 ko=$2 output=$3
+  test -f "$input" && test -f "$ko"
+  test "$(dpkg-deb -f "$input" Package)" = "$package"
+  test "$(dpkg-deb -f "$input" Version)" = "$version"
+  test "$(dpkg-deb -f "$input" X-Infiltrator-Native-Profile)" = portable
+  test "$(dpkg-deb -f "$input" X-Infiltrator-Source-Revision)" = "$(revision)"
+  local stage="$work/kernel-bundle"
+  mkdir -p "$stage"
+  dpkg-deb --raw-extract "$input" "$stage"
+  test ! -e "$stage/$kernel_path"
+  mkdir -p "$stage/System/Kernel/Filesystems"
+  install -m 0644 "$ko" "$stage/$kernel_path"
+  local release=6.12.107
+  kernel_verify "$stage/$kernel_path" "$release"
+  {
+    printf 'X-Infiltrator-Kernel-SHA256: %s\n' "$(sha256sum "$ko" | cut -d' ' -f1)"
+    printf 'X-Infiltrator-Kernel-Release: %s\n' "$release"
+  } >> "$stage/DEBIAN/control"
+  mkdir -p "$(dirname "$output")"
+  dpkg-deb --root-owner-group --build "$stage" "$output"
+  bash standalone/check-package.sh "$output" --profile portable --kernel-release "$release"
+}
+install_native() {
+  local profile=aggressive system_mode=0 build_only=0 output='' selected_kernel=''
+  while (($#)); do
+    case $1 in
+      --profile) profile=$2; shift 2;;
+      --kernel-build) selected_kernel=$2; shift 2;;
+      --output) output=$2; shift 2;;
+      --build-only) build_only=1; shift;;
+      --system-package-mode) system_mode=1; shift;;
+      --help|-h) echo 'UFS2 [--profile aggressive|portable] [--kernel-build PATH] [--build-only --output PATH]'; return 0;;
+      *) echo "Unknown native installer option: $1" >&2; return 2;;
+    esac
+  done
+  case $profile in aggressive|portable);;*) echo 'Unknown profile' >&2; return 2;; esac
+  if ((build_only)) && [[ -z $output ]]; then
+    echo 'Build-only requires --output DIRECTORY' >&2; return 2
+  fi
+  if ((system_mode)) && [[ -n $selected_kernel ]]; then
+    echo 'OS package mode forbids manual --kernel-build' >&2; return 2
+  fi
+  check_tools install
+  if ((!system_mode)); then
+    if [[ -z $selected_kernel ]]; then selected_kernel="/lib/modules/$(uname -r)/build"; fi
+    test -s "$selected_kernel/Module.symvers" || {
+      echo 'Prepared running-kernel source and Module.symvers required' >&2; return 1;
+    }
+  fi
+  local version_suffix=''
+  if [[ $profile == aggressive ]]; then version_suffix='+native1'; fi
+  local filename="$package"_"$version$version_suffix"_amd64.deb
+  local target_dir="$work"
+  if ((build_only)); then target_dir=$(realpath -m "$output"); fi
+  mkdir -p "$target_dir"
+  local target="$target_dir/$filename"
+  build_deb "$profile" "$target" "$selected_kernel"
+  if ((build_only)); then printf '%s\n' "$target"; return 0; fi
+  if ((EUID == 0)); then dpkg -i "$target"; else sudo dpkg -i "$target"; fi
+  local installed="/System/Filesystems/$module"
+  local pdf="/System/Resources/Documentation/$repository.pdf"
+  test -f "$installed" && test -f "$pdf"
+  test "$(sha256sum "$installed" | cut -d' ' -f1)" = "$(dpkg-query -W -f='${X-Infiltrator-Resource-SHA256}' "$package")"
+  test "$(sha256sum "$pdf" | cut -d' ' -f1)" = "$(dpkg-query -W -f='${X-Infiltrator-PDF-SHA256}' "$package")"
+  test "$(dpkg-query -W -f='${Version}' "$package")" = "$version$version_suffix"
+  dpkg-query -S "$installed" | grep -F "$package:" >/dev/null
+  dpkg-query -S "$pdf" | grep -F "$package:" >/dev/null
+  echo "Installed and verified $installed"
+}
+(($# > 0)) || { echo 'usage: release.sh release|install|bundle-kernel' >&2; exit 2; }
+action=$1; shift
+case $action in
+  release) (($# == 0)) || exit 2; release;;
+  install) install_native "$@";;
+  bundle-kernel) bundle_kernel "$@";;
+  *) echo "Unknown UFS2 native action: $action" >&2; exit 2;;
+esac
