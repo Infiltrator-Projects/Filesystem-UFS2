@@ -4,6 +4,10 @@
  * path/CLI worker is not falsely advertised as mounted V2 operations.
  */
 #include <infiltratr/filesystem_module_v2.h>
+/* Readable without executing untrusted ELF code; tied to the V2 export. */
+__attribute__((used,section(".ifsmeta")))
+static const char v2_module_identity[]="IFS-MODULE:ufs2:common2";
+
 #include "ufs_native.h"
 
 static int common_v2_probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
