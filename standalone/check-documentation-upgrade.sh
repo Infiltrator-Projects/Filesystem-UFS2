@@ -7,6 +7,15 @@ set -euo pipefail
 }
 package=$(realpath -- "$1")
 root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Resolve the checkout root explicitly if the CI runner executes via a wrapper.
+if [[ ! -f "$root/standalone/config.json" ]]; then
+  checkout=$(git rev-parse --show-toplevel 2>/dev/null || :)
+  if [[ -f "$checkout/standalone/config.json" ]]; then root=$checkout; fi
+fi
+[[ -f "$root/standalone/config.json" ]] || {
+  echo "Filesystem source configuration missing: script=${BASH_SOURCE[0]} root=$root cwd=$PWD" >&2
+  exit 1
+}
 repo=$(jq -er '.repository' "$root/standalone/config.json")
 module=$(jq -er '.module' "$root/standalone/config.json")
 pdf=$(jq -er '.pdf' "$root/standalone/config.json")

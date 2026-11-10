@@ -15,6 +15,15 @@ while (($#)); do
 done
 [[ "$profile" == portable || "$profile" == aggressive ]] || usage
 root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Resolve the checkout root explicitly if the CI runner executes via a wrapper.
+if [[ ! -f "$root/standalone/config.json" ]]; then
+  checkout=$(git rev-parse --show-toplevel 2>/dev/null || :)
+  if [[ -f "$checkout/standalone/config.json" ]]; then root=$checkout; fi
+fi
+[[ -f "$root/standalone/config.json" ]] || {
+  echo "Filesystem source configuration missing: script=${BASH_SOURCE[0]} root=$root cwd=$PWD" >&2
+  exit 1
+}
 for cmd in jq dpkg-deb readelf nm sha256sum; do
   command -v "$cmd" >/dev/null || { echo "Missing build prerequisite: $cmd" >&2; exit 1; }
 done
