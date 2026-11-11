@@ -858,6 +858,103 @@ static int ufs_group_start(const LdUfsSummary *summary, uint32_t group,
     return 0;
 }
 
+/* Reuse the single native UFS decoder, endian rules and cylinder-group
+ * placement algorithm for partition-relative Common V2 allocation checks.
+ * This is read-only: the host owns all I/O and exclusive/mounted safety.
+ * Each group is bounded independently; no whole-volume bitmap allocation. */
+int ufs_verify_free_bitmap_host_v2(const IfsFsHostRuntimeV2 *host,
+                                   const LdUfsSummary *summary,
+                                   uint64_t *verified_free_fragments)
+{
+    uint64_t counted = 0u, covered = 0u;
+    uint8_t *raw;
+    int result = IFS_FS_OK;
+    if (!summary || !verified_free_fragments || !ifs_fs_host_v2_valid(host))
+        return IFS_FS_INVALID;
+    *verified_free_fragments = 0u;
+    if (!summary->allocation_totals_known || !summary->cylinder_geometry_known)
+        return IFS_FS_UNSUPPORTED;
+    if (!summary->fragment_size || !summary->fragments_per_group ||
+        !summary->fragments_per_block ||
+        summary->cylinder_group_size < UFS_CG_MIN_BYTES ||
+        !summary->cylinder_groups ||
+        summary->filesystem_fragments > UINT64_MAX / summary->fragment_size ||
+        summary->filesystem_fragments * summary->fragment_size >
+            host->volume_bytes)
+        return IFS_FS_CORRUPT;
+    raw = host->allocate(host->context, summary->cylinder_group_size);
+    if (!raw) return IFS_FS_NO_MEMORY;
+    const bool little = ufs_little_endian(summary->variant);
+    for (uint32_t group = 0u; group < summary->cylinder_groups; ++group) {
+        uint64_t group_base, group_start, cg_fragment, at;
+        uint32_t fragments, freeoff, iused;
+        uint64_t expected, free_map_bytes, inode_map_bytes;
+        if (host->cancelled &&
+            (host->capabilities & IFS_FS_HOST_CANCEL) &&
+            host->cancelled(host->context)) {
+            result = IFS_FS_BUSY;
+            break;
+        }
+        group_base = (uint64_t)group * summary->fragments_per_group;
+        if (group_base >= summary->filesystem_fragments ||
+            ufs_group_start(summary, group, &group_start, NULL, 0u) != 0 ||
+            !infiltratr_u64_add_checked(
+                group_start, summary->cylinder_block_fragment, &cg_fragment) ||
+            cg_fragment >= summary->filesystem_fragments ||
+            !infiltratr_u64_multiply_checked(
+                cg_fragment, summary->fragment_size, &at) ||
+            at > host->volume_bytes ||
+            summary->cylinder_group_size > host->volume_bytes - at) {
+            result = IFS_FS_CORRUPT;
+            break;
+        }
+        result = ifs_fs_host_read_bytes_v2(
+            host, at, raw, summary->cylinder_group_size);
+        if (result != IFS_FS_OK) break;
+        if (read_u32(raw + UFS_CG_MAGIC_OFFSET, little) != UFS_CG_MAGIC ||
+            read_u32(raw + UFS_CG_INDEX_OFFSET, little) != group) {
+            result = IFS_FS_CORRUPT;
+            break;
+        }
+        fragments = read_u32(raw + UFS_CG_NDBLK_OFFSET, little);
+        freeoff = read_u32(raw + UFS_CG_FREEOFF_OFFSET, little);
+        iused = read_u32(raw + UFS_CG_IUSEDOFF_OFFSET, little);
+        expected = summary->filesystem_fragments - group_base;
+        if (expected > summary->fragments_per_group)
+            expected = summary->fragments_per_group;
+        free_map_bytes = (expected + 7u) / 8u;
+        inode_map_bytes = ((uint64_t)summary->inodes_per_group + 7u) / 8u;
+        if (fragments != expected ||
+            freeoff < UFS_CG_MIN_BYTES || iused < UFS_CG_MIN_BYTES ||
+            (uint64_t)freeoff + free_map_bytes >
+                summary->cylinder_group_size ||
+            (uint64_t)iused + inode_map_bytes >
+                summary->cylinder_group_size) {
+            result = IFS_FS_CORRUPT;
+            break;
+        }
+        const uint8_t *bitmap = raw + freeoff;
+        for (uint32_t local = 0u; local < fragments; ++local)
+            counted += (bitmap[local >> 3u] &
+                        (uint8_t)(1u << (local & 7u))) != 0u;
+        covered += fragments;
+    }
+    host->release(host->context, raw);
+    if (result != IFS_FS_OK) return result;
+    if (covered != summary->filesystem_fragments ||
+        summary->free_blocks >
+            (UINT64_MAX - summary->free_fragments) /
+                 summary->fragments_per_block)
+        return IFS_FS_CORRUPT;
+    const uint64_t recorded =
+        summary->free_blocks * summary->fragments_per_block +
+        summary->free_fragments;
+    if (counted != recorded)
+        return IFS_FS_CORRUPT;
+    *verified_free_fragments = counted;
+    return IFS_FS_OK;
+}
+
 static bool bit_get(const uint8_t *bitmap, uint64_t bit)
 {
     return (bitmap[bit >> 3U] &

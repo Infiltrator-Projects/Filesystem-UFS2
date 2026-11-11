@@ -77,6 +77,15 @@ static int write_geometry(int fd,const unsigned char magic[4],int little,
     put64(sb,1016u,10u,little);
     put64(sb,1032u,2u,little);
     memcpy(sb+1372u,magic,4u);
+    unsigned char cg[512]={0};
+    put32(cg,4u,0x00090255u,little);
+    put32(cg,12u,0u,little);
+    put32(cg,20u,64u,little);
+    put32(cg,92u,168u,little);
+    put32(cg,96u,176u,little);
+    for(unsigned bit=0u;bit<42u;++bit)
+        cg[176u+(bit>>3u)] |= (unsigned char)(1u << (bit & 7u));
+    if(pwrite(fd,cg,sizeof cg,1024)!=(ssize_t)sizeof cg) return -1;
     return pwrite(fd,sb,sizeof sb,8192)==(ssize_t)sizeof sb ? 0:-1;
 }
 int main(void)
@@ -143,6 +152,13 @@ int main(void)
     CHECK(core->unmount(previous)==IFS_FS_INVALID);
     info.structure_bytes=sizeof(info);
     CHECK(ops->query(previous,&info)==IFS_FS_INVALID);
+    /* A valid superblock with a corrupted cylinder-group free map must be
+     * rejected rather than exposing unverified recorded free totals. */
+    unsigned char damaged=0u;
+    CHECK(pwrite(fd,&damaged,1u,1024+176+5)==1);
+    info.structure_bytes=sizeof(info);
+    CHECK(core->mount(&host,&session,&info)==IFS_FS_CORRUPT);
+    CHECK(session==NULL);
     CHECK(write_geometry(fd,be,0,0)==0);
     context.sector=4096u;
     host.logical_sector_bytes=4096u;

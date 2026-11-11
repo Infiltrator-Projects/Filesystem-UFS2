@@ -95,6 +95,12 @@ static int mount_volume(const IfsFsHostRuntimeV2 *host, void **volume,
     if (rc != IFS_FS_OK) return rc;
     rc = describe(&summary, host->volume_bytes, &measured);
     if (rc != IFS_FS_OK) return rc;
+    uint64_t verified_free = 0u;
+    rc = ufs_verify_free_bitmap_host_v2(host, &summary, &verified_free);
+    if (rc != IFS_FS_OK) return rc;
+    if (verified_free > UINT64_MAX / summary.fragment_size ||
+        verified_free * summary.fragment_size != measured.free_bytes)
+        return IFS_FS_CORRUPT;
     session.info = measured;
     session.active = ++session.generation;
     *info = measured;

@@ -75,6 +75,11 @@ typedef struct {
 /* Strictly read-only, partition-relative Common V2 host backend. */
 int ufs_read_summary_host_v2(const IfsFsHostRuntimeV2 *host,
                              LdUfsSummary *summary);
+/* Check actual cylinder-group free bitmaps and compare their totals to the
+ * decoded superblock; never assert recorded totals without verification. */
+int ufs_verify_free_bitmap_host_v2(const IfsFsHostRuntimeV2 *host,
+                                   const LdUfsSummary *summary,
+                                   uint64_t *verified_free_fragments);
 int ufs_read_summary(const char *path, LdUfsSummary *summary,
                      char *error, size_t error_size);
 int ufs_analyse_allocation(const char *path, LdUfsAnalysis *analysis,

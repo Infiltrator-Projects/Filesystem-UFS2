@@ -21,3 +21,11 @@ on-disk identity guard and format_id=ufs2. UFS1 is published independently
 in Filesystem-UFS1/UFS1.so. Existing UFS2-only Test Media format and raw
 payload interfaces remain solely in this repository. Full qualification and
 consumer coordination are mandatory before replacing deployed UFS.so.
+
+## Common V2 read-only allocation verification (1.0.15)
+The hosted CORE mount and VOLUME query now verify cylinder-group bitmap
+free totals through Common V2 read-only I/O. Damaged group metadata,
+inconsistent allocation counts and misaligned 4Kn requests fail closed.
+The native UFS2 parser and verifier remain in this independent source repo.
+These checks are not full filesystem repair, file traversal, or qualified
+V2 Defrag map/plan/execute/recover. Those capabilities remain unadvertised.
