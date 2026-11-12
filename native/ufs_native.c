@@ -792,6 +792,7 @@ typedef struct {
     int fd;
     uint64_t physical_bytes;
     LdUfsSummary summary;
+    const IfsFsHostRuntimeV2 *host; /* non-owning; null for native FD writers */
 } UfsInventory;
 
 static void write_u32(uint8_t *data, uint32_t value, bool little)
@@ -1012,6 +1013,28 @@ static void inventory_free(UfsInventory *inventory)
     inventory->fd = -1;
 }
 
+/* The existing inode tree, CG and indirect-block decoder uses this
+ * single I/O boundary. Hosted V2 mapping reads only through the caller's
+ * authenticated, partition-relative Common V2 callbacks; legacy native
+ * analysis/transaction staging retains its established FD path. */
+static int inventory_read_exact_at(const UfsInventory *inventory,
+                                   void *buffer, size_t bytes, uint64_t offset,
+                                   char *error, size_t error_size,
+                                   const char *description)
+{
+    if (inventory->host) {
+        if (bytes > UINT32_MAX ||
+            ifs_fs_host_read_bytes_v2(inventory->host, offset, buffer,
+                                       (uint32_t)bytes) != IFS_FS_OK) {
+            ufs_error(error, error_size, description);
+            return -1;
+        }
+        return 0;
+    }
+    return read_exact_at(inventory->fd, buffer, bytes, offset,
+                         error, error_size, description);
+}
+
 static int read_group(const UfsInventory *inventory, uint32_t group,
                       uint8_t *raw, uint32_t *group_fragments,
                       uint32_t *iused_offset, uint32_t *free_offset,
@@ -1033,7 +1056,7 @@ static int read_group(const UfsInventory *inventory, uint32_t group,
                                          &offset) ||
         offset > inventory->physical_bytes ||
         summary->cylinder_group_size > inventory->physical_bytes - offset ||
-        read_exact_at(inventory->fd, raw, summary->cylinder_group_size, offset,
+        inventory_read_exact_at(inventory, raw, summary->cylinder_group_size, offset,
                       error, error_size, "cannot read UFS cylinder group") != 0)
         return -1;
 
@@ -1123,7 +1146,7 @@ static int read_daddr_at(const UfsInventory *inventory, uint64_t offset,
     const size_t bytes = ufs1_variant(&inventory->summary) ? 4U : 8U;
     if (offset > inventory->physical_bytes ||
         bytes > inventory->physical_bytes - offset ||
-        read_exact_at(inventory->fd, raw, bytes, offset, error, error_size,
+        inventory_read_exact_at(inventory, raw, bytes, offset, error, error_size,
                       "cannot read UFS block pointer") != 0)
         return -1;
     const bool little = ufs_little_endian(inventory->summary.variant);
@@ -1294,7 +1317,7 @@ static int inventory_collect_files(UfsInventory *inventory,
                     &inode_offset) ||
                 inode_offset > inventory->physical_bytes ||
                 inode_size > inventory->physical_bytes - inode_offset ||
-                read_exact_at(inventory->fd, inode, inode_size, inode_offset,
+                inventory_read_exact_at(inventory, inode, inode_size, inode_offset,
                               error, error_size, "cannot read UFS inode") != 0) {
                 free(cg);
                 return -1;
@@ -1428,6 +1451,203 @@ static int inventory_load(const char *path, UfsInventory *inventory,
         return -1;
     }
     return 0;
+}
+
+
+/* Reuse the complete native inode, CG bitmap, and indirect-block scanner.
+ * This hosted entry point has no host path and never opens an FD; all media
+ * reads are through the read-only Common V2 host. Allocation/inode ownership
+ * is fully checked before a file's extents become visible. */
+int ufs_map_host_open_v2(const IfsFsHostRuntimeV2 *host,
+                         const LdUfsSummary *summary, void **handle)
+{
+    UfsInventory *inv;
+    char error[256]={0};
+    uint64_t fs_bytes;
+    if (!handle || !summary || !ifs_fs_host_v2_valid(host) ||
+        !(host->capabilities & IFS_FS_HOST_READ_ONLY))
+        return IFS_FS_INVALID;
+    *handle=NULL;
+    if (!summary->allocation_totals_known || !summary->cylinder_geometry_known ||
+        !summary->fragment_size || !summary->filesystem_fragments ||
+        !infiltratr_u64_multiply_checked(summary->filesystem_fragments,
+                                          summary->fragment_size,&fs_bytes) ||
+        fs_bytes > host->volume_bytes)
+        return IFS_FS_CORRUPT;
+    inv=calloc(1u,sizeof(*inv));
+    if (!inv) return IFS_FS_NO_MEMORY;
+    inv->fd=-1;
+    inv->host=host;
+    inv->physical_bytes=host->volume_bytes;
+    inv->summary=*summary;
+    if (inventory_load_free_bitmap(inv,error,sizeof(error)) ||
+        inventory_collect_files(inv,error,sizeof(error))) {
+        inventory_free(inv);
+        free(inv);
+        return IFS_FS_CORRUPT;
+    }
+    *handle=inv;
+    return IFS_FS_OK;
+}
+
+void ufs_map_host_close_v2(void *handle)
+{
+    UfsInventory *inv=handle;
+    if (!inv) return;
+    inventory_free(inv);
+    free(inv);
+}
+
+static const UfsFileRecord *ufs_v2_record(
+    const UfsInventory *inv, uint64_t inode)
+{
+    for(size_t i=0u;i<inv->file_count;++i)
+        if(inv->files[i].inode==inode)return &inv->files[i];
+    return NULL;
+}
+
+/* Resolve a directory component using actual BSD UFS dirent records.
+ * Reject links, invalid records and malformed metadata instead of guessing
+ * an inode from a fixture filename or applying host directory traversal. */
+static int ufs_v2_child(const UfsInventory *inv,const UfsFileRecord *directory,
+                        const char *name,size_t name_bytes,uint64_t *child)
+{
+    const LdUfsSummary *s=&inv->summary;
+    const bool little=ufs_little_endian(s->variant);
+    uint8_t *data;
+    uint64_t previous=UINT64_MAX;
+    int result=IFS_FS_NOT_FOUND;
+    if(!directory->directory || directory->sparse || !name_bytes ||
+       name_bytes>255u || !s->block_size)
+        return IFS_FS_UNSUPPORTED;
+    data=malloc(s->block_size);
+    if(!data)return IFS_FS_NO_MEMORY;
+    for(uint32_t b=0u;b<directory->block_count;++b) {
+        const UfsBlockRef *ref=&inv->blocks[directory->first_block+b];
+        uint64_t logical,physical,available;
+        if(ref->logical_block==previous ||
+           ref->logical_block > UINT64_MAX/s->block_size ||
+           ref->physical_fragment>UINT64_MAX/s->fragment_size) {
+            result=IFS_FS_CORRUPT;break;
+        }
+        previous=ref->logical_block;
+        logical=ref->logical_block*s->block_size;
+        physical=ref->physical_fragment*s->fragment_size;
+        if(logical>=directory->size || physical>inv->physical_bytes) {
+            result=IFS_FS_CORRUPT;break;
+        }
+        available=directory->size-logical;
+        if(available>s->block_size)available=s->block_size;
+        if(available>(uint64_t)ref->span_fragments*s->fragment_size)
+            available=(uint64_t)ref->span_fragments*s->fragment_size;
+        if(available<8u || available>UINT32_MAX ||
+           inventory_read_exact_at(inv,data,(size_t)available,physical,
+                                   NULL,0u,"invalid UFS directory block")) {
+            result=IFS_FS_CORRUPT;break;
+        }
+        for(uint32_t pos=0u;pos<available;) {
+            if(available-pos<8u){result=IFS_FS_CORRUPT;goto finish;}
+            const uint32_t inode=read_u32(data+pos,little);
+            const uint16_t record=little ?
+                infiltratr_load_le16(data+pos+4u) :
+                infiltratr_load_be16(data+pos+4u);
+            const uint8_t length=data[pos+7u];
+            if(record<8u || (record&3u) || record>available-pos ||
+               length>255u || (uint32_t)length+8u>=record) {
+                result=IFS_FS_CORRUPT;goto finish;
+            }
+            if(inode!=0u && length==name_bytes &&
+               !memcmp(data+pos+8u,name,name_bytes)) {
+                /* The directory itself must not refer to an unallocated
+                 * inode. The follow-up inventory lookup enforces that. */
+                *child=inode;
+                result=IFS_FS_OK;
+                goto finish;
+            }
+            pos+=record;
+        }
+    }
+finish:
+    free(data);
+    return result;
+}
+
+static int ufs_v2_find_path(const UfsInventory *inv,const char *path,
+                            const UfsFileRecord **resolved)
+{
+    const UfsFileRecord *current;
+    const char *cursor=path;
+    if(!path || path[0]!='/')return IFS_FS_INVALID;
+    current=ufs_v2_record(inv,2u);
+    if(!current || !current->directory)return IFS_FS_NOT_FOUND;
+    ++cursor;
+    if(!*cursor){*resolved=current;return IFS_FS_OK;}
+    for(unsigned depth=0u;*cursor;++depth) {
+        if(depth>=256u)return IFS_FS_UNSUPPORTED;
+        const char *end=cursor;
+        while(*end && *end!='/'){
+            if((size_t)(end-cursor)>=255u)return IFS_FS_UNSUPPORTED;
+            ++end;
+        }
+        const size_t len=(size_t)(end-cursor);
+        if(!len || (len==1u && cursor[0]=='.') ||
+           (len==2u && cursor[0]=='.' && cursor[1]=='.'))
+            return IFS_FS_INVALID;
+        uint64_t child=0u;
+        const int rc=ufs_v2_child(inv,current,cursor,len,&child);
+        if(rc!=IFS_FS_OK)return rc;
+        current=ufs_v2_record(inv,child);
+        if(!current)return IFS_FS_CORRUPT;
+        if(!*end)break;
+        if(!current->directory)return IFS_FS_NOT_FOUND;
+        cursor=end+1;
+        if(!*cursor)return IFS_FS_INVALID;
+    }
+    *resolved=current;
+    return IFS_FS_OK;
+}
+
+/* Strict Common V2 DEFRAG.MAP: actual inode tree references, never a
+ * synthetic bitmap or a relocation plan. Only host-backed read-only mounts
+ * can call this entry. Sparse regions remain gaps in logical offsets.
+ * All native writer operations remain deliberately unadvertised. */
+int ufs_map_host_page_v2(void *handle, const char *path,
+                         uint64_t first_extent, IfsFsExtentV2 *extents,
+                         uint32_t capacity, uint32_t *written)
+{
+    const UfsInventory *inv=handle;
+    const UfsFileRecord *file=NULL;
+    const LdUfsSummary *s;
+    int rc;
+    if(!inv || !inv->host || !written || !extents || !capacity)
+        return IFS_FS_INVALID;
+    *written=0u;
+    rc=ufs_v2_find_path(inv,path,&file);
+    if(rc!=IFS_FS_OK)return rc;
+    s=&inv->summary;
+    if(first_extent>=file->block_count)return IFS_FS_END;
+    for(uint64_t i=first_extent;i<file->block_count && *written<capacity;++i) {
+        const UfsBlockRef *ref=&inv->blocks[file->first_block+i];
+        uint64_t logical,physical,length;
+        if(ref->logical_block>UINT64_MAX/s->block_size ||
+           ref->physical_fragment>UINT64_MAX/s->fragment_size)
+            return IFS_FS_CORRUPT;
+        logical=ref->logical_block*s->block_size;
+        physical=ref->physical_fragment*s->fragment_size;
+        if(logical>=file->size || physical>=inv->physical_bytes)
+            return IFS_FS_CORRUPT;
+        length=file->size-logical;
+        if(length>(uint64_t)ref->span_fragments*s->fragment_size)
+            length=(uint64_t)ref->span_fragments*s->fragment_size;
+        if(!length || length>inv->physical_bytes-physical)
+            return IFS_FS_CORRUPT;
+        extents[*written]=(IfsFsExtentV2){
+            .logical_offset=logical,.physical_offset=physical,
+            .length=length,.flags=0u,.reserved=0u
+        };
+        ++*written;
+    }
+    return IFS_FS_OK;
 }
 
 static void mark_map_range(LdUfsMapCell *cells, uint64_t cell_count,

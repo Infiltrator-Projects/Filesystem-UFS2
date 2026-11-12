@@ -94,12 +94,18 @@ int main(void)
     CHECK(ifs_fs_api_v2_valid(api,"ufs2"));
     CHECK(api->runtime_profiles==IFS_FS_PROFILE_HOSTED);
     CHECK(api->group_mask==(IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
-                           IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME)));
+                           IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
+                           IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG)));
     const IfsFsCoreOpsV2 *core=(const IfsFsCoreOpsV2 *)
         ifs_fs_group_v2(api,IFS_FS_GROUP_CORE);
     const IfsFsVolumeOpsV2 *ops=(const IfsFsVolumeOpsV2 *)
         ifs_fs_group_v2(api,IFS_FS_GROUP_VOLUME);
-    CHECK(core && ops);
+    const IfsFsDefragOpsV2 *defrag=(const IfsFsDefragOpsV2 *)
+        ifs_fs_group_v2(api,IFS_FS_GROUP_DEFRAG);
+    CHECK(core && ops && defrag);
+    CHECK(defrag->header.capabilities==IFS_FS_DEFRAG_MAP);
+    CHECK(defrag->map && !defrag->plan && !defrag->execute &&
+          !defrag->verify && !defrag->recover && !defrag->release_plan);
     CHECK(core->header.capabilities==(IFS_FS_CORE_PROBE|IFS_FS_CORE_MOUNT));
     CHECK(ops->header.capabilities==IFS_FS_VOLUME_QUERY);
     CHECK(core->probe && core->mount && core->unmount && ops->query);
@@ -147,6 +153,12 @@ int main(void)
     CHECK(previous==NULL);
     info.structure_bytes=sizeof(info);
     CHECK(ops->query(session,&info)==IFS_FS_OK);
+    IfsFsExtentV2 extent={0};
+    uint32_t count=123u;
+    /* Synthetic geometry has no allocated root inode; never invent an
+     * extent or treat magic-only media as mapped. */
+    CHECK(defrag->map(session,"/",&extent,1u,&count)==IFS_FS_NOT_FOUND);
+    CHECK(count==0u);
     previous=session;
     CHECK(core->unmount(session)==IFS_FS_OK);
     CHECK(core->unmount(previous)==IFS_FS_INVALID);

@@ -80,6 +80,14 @@ int ufs_read_summary_host_v2(const IfsFsHostRuntimeV2 *host,
 int ufs_verify_free_bitmap_host_v2(const IfsFsHostRuntimeV2 *host,
                                    const LdUfsSummary *summary,
                                    uint64_t *verified_free_fragments);
+/* Native, cached, read-only UFS inode inventory. Never exports a writer.
+ * The filesystem itself owns directory traversal and file extent translation. */
+int ufs_map_host_open_v2(const IfsFsHostRuntimeV2 *, const LdUfsSummary *,
+                         void **inventory);
+int ufs_map_host_page_v2(void *inventory, const char *path,
+                         uint64_t first_extent, IfsFsExtentV2 *,
+                         uint32_t capacity, uint32_t *written);
+void ufs_map_host_close_v2(void *inventory);
 int ufs_read_summary(const char *path, LdUfsSummary *summary,
                      char *error, size_t error_size);
 int ufs_analyse_allocation(const char *path, LdUfsAnalysis *analysis,

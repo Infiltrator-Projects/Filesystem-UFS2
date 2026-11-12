@@ -39,6 +39,9 @@ static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
 static struct {
     uintptr_t generation, active;
     IfsFsVolumeInfoV2 info;
+    const IfsFsHostRuntimeV2 *host; /* borrowed for mounted session */
+    LdUfsSummary summary;
+    void *map_inventory; /* lazy source-owned inode inventory */
 } session;
 
 static int live(void *volume)
@@ -102,6 +105,9 @@ static int mount_volume(const IfsFsHostRuntimeV2 *host, void **volume,
         verified_free * summary.fragment_size != measured.free_bytes)
         return IFS_FS_CORRUPT;
     session.info = measured;
+    session.host = host;
+    session.summary = summary;
+    session.map_inventory = NULL;
     session.active = ++session.generation;
     *info = measured;
     *volume = (void *)session.active;
@@ -110,6 +116,11 @@ static int mount_volume(const IfsFsHostRuntimeV2 *host, void **volume,
 static int unmount_volume(void *volume)
 {
     if (!live(volume)) return IFS_FS_INVALID;
+    if(session.map_inventory)
+        ufs_map_host_close_v2(session.map_inventory);
+    session.map_inventory = NULL;
+    session.host = NULL;
+    session.summary = (LdUfsSummary){0};
     session.active = 0u;
     session.info = (IfsFsVolumeInfoV2){0};
     return IFS_FS_OK;
@@ -121,6 +132,24 @@ static int query_volume(void *volume, IfsFsVolumeInfoV2 *info)
     *info = session.info;
     return IFS_FS_OK;
 }
+static int map_path(void *volume,const char *path,uint64_t first_extent,
+                    IfsFsExtentV2 *extents,uint32_t capacity,uint32_t *written)
+{
+    if(!live(volume) || !written)return IFS_FS_INVALID;
+    *written=0u;
+    if(!session.map_inventory){
+        int rc=ufs_map_host_open_v2(session.host,&session.summary,
+                                     &session.map_inventory);
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    return ufs_map_host_page_v2(session.map_inventory,path,first_extent,
+                                extents,capacity,written);
+}
+static const IfsFsDefragOpsV2 defrag_ops = {
+    .header = {IFS_FS_GROUP_ABI_V2,sizeof(IfsFsDefragOpsV2),
+               IFS_FS_GROUP_DEFRAG,0u,IFS_FS_DEFRAG_MAP},
+    .map = map_path
+};
 static const IfsFsCoreOpsV2 core = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsCoreOpsV2),
                IFS_FS_GROUP_CORE, 0u,
@@ -141,6 +170,7 @@ static const IfsFsGroupHeaderV2 *query(uint32_t group_id,
         maximum < IFS_FS_GROUP_ABI_V2) return NULL;
     if (group_id == IFS_FS_GROUP_CORE) return &core.header;
     if (group_id == IFS_FS_GROUP_VOLUME) return &volume_ops.header;
+    if (group_id == IFS_FS_GROUP_DEFRAG) return &defrag_ops.header;
     return NULL;
 }
 static const IfsFsModuleApiV2 api = {
@@ -149,7 +179,8 @@ static const IfsFsModuleApiV2 api = {
     .format_id = "ufs2",
     .runtime_profiles = IFS_FS_PROFILE_HOSTED,
     .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
-                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME),
+                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
+                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG),
     .query_group = query
 };
 __attribute__((visibility("default")))

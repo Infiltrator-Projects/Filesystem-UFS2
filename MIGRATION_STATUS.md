@@ -29,3 +29,18 @@ inconsistent allocation counts and misaligned 4Kn requests fail closed.
 The native UFS2 parser and verifier remain in this independent source repo.
 These checks are not full filesystem repair, file traversal, or qualified
 V2 Defrag map/plan/execute/recover. Those capabilities remain unadvertised.
+
+## Common V2 native file extent mapping (1.0.16)
+The module now advertises **read-only DEFRAG.MAP only**, using the same
+validated native cylinder-group/inode/indirect-pointer inventory as the
+legacy native analysis engine. A host I/O adaptor feeds the original scanner
+through the strict Common V2 read callbacks. The provider itself resolves
+absolute file paths from on-disk BSD directory entries, rejects malformed
+records, and returns paginated actual file extents with logical/physical
+byte offsets. Sparse logical intervals are gaps, not fabricated data extents.
+The inventory is retained only for the duration of the read-only mount.
+DEFRAG.PLAN, EXECUTE, VERIFY and RECOVER are **not yet advertised**;
+the existing source-owned transaction writer and recovery engine remain
+unchanged and are not invoked through this read-only path. No user disk
+mutation, recovery compatibility, file-write API or production kernel
+qualification is implied by this checkpoint.
