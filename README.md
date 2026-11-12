@@ -13,7 +13,7 @@ verification. It installs to `/System/Filesystems/UFS2.so`.
 
 UFS1 and UFS2 are separately identified, built and installed. The
 package's required filesystem entry point is the Common V2 API.
-Legacy per-format V1 exports are not part of the target architecture and
+Older format-specific exports are not part of the target architecture and
 must be retired after their caller functionality has a qualified native V2
 implementation, not silently retained as the long-term interface.
 
