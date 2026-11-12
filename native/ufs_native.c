@@ -1096,8 +1096,20 @@ static int read_group(const UfsInventory *inventory, uint32_t group,
 static int inventory_load_free_bitmap(UfsInventory *inventory,
                                       char *error, size_t error_size)
 {
-    if (!ld_bitmap_size(inventory->summary.filesystem_fragments,
-                        &inventory->bitmap_bytes)) {
+    /* Common V2 hosted inventory must not depend on the retired
+     * Defragmenter services binding. Use a checked native bitmap size for
+     * V2, while preserving the established services path for V1 writers. */
+    const uint64_t fragments=inventory->summary.filesystem_fragments;
+    if (inventory->host) {
+        const uint64_t needed=(fragments / 8u) +
+                              (uint64_t)(fragments % 8u != 0u);
+        if(needed > SIZE_MAX) {
+            ufs_error(error,error_size,"UFS hosted bitmap size overflows");
+            return -1;
+        }
+        inventory->bitmap_bytes=(size_t)needed;
+    } else if (!ld_bitmap_size(inventory->summary.filesystem_fragments,
+                               &inventory->bitmap_bytes)) {
         ufs_error(error, error_size, "UFS allocation bitmap is too large");
         return -1;
     }
