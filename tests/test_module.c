@@ -157,7 +157,7 @@ int main(void)
     uint32_t count=123u;
     /* Synthetic geometry has no allocated root inode; never invent an
      * extent or treat magic-only media as mapped. */
-    CHECK(defrag->map(session,"/",&extent,1u,&count)==IFS_FS_NOT_FOUND);
+    CHECK(defrag->map(session,"/",0u,&extent,1u,&count)==IFS_FS_NOT_FOUND);
     CHECK(count==0u);
     previous=session;
     CHECK(core->unmount(session)==IFS_FS_OK);
