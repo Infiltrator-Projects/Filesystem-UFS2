@@ -1553,7 +1553,7 @@ static int ufs_v2_child(const UfsInventory *inv,const UfsFileRecord *directory,
                 infiltratr_load_be16(data+pos+4u);
             const uint8_t length=data[pos+7u];
             if(record<8u || (record&3u) || record>available-pos ||
-               length>255u || (uint32_t)length+8u>=record) {
+               (uint32_t)length+8u>=record) {
                 result=IFS_FS_CORRUPT;goto finish;
             }
             if(inode!=0u && length==name_bytes &&
