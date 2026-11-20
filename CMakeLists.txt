@@ -21,18 +21,19 @@ FetchContent_MakeAvailable(infiltratr_common)
 # by this standalone filesystem package.
 set_property(DIRECTORY "${infiltratr_common_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"${PROJECT_VERSION}\"\n")
+# Use only the source-owned V2 native reader and Common V2 adapter.
+# Historical worker/formatter and Linux kernel source remain uninstalled.
 add_library(ufs-driver SHARED
- native/ufs_native.c native/ufs_worker.c fixtures/ufs_mkfs.c
- compat/legacy_services.c compat/runtime_alloc.c
+ native/ufs_native.c
  module/ufs_module.c)
-set_source_files_properties(fixtures/ufs_mkfs.c PROPERTIES
- COMPILE_DEFINITIONS "main=ifs_ufs_mkfs_main")
-set_source_files_properties(native/ufs_worker.c PROPERTIES
- COMPILE_DEFINITIONS "main=ifs_ufs_worker_main")
 set_target_properties(ufs-driver PROPERTIES PREFIX "" OUTPUT_NAME "UFS2" SUFFIX ".so")
-target_compile_definitions(ufs-driver PRIVATE _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_UFS_MAJOR=2)
-target_compile_options(ufs-driver PRIVATE -Wall -Wextra -Wpedantic -Werror)
-target_link_options(ufs-driver PRIVATE -Wl,-z,defs)
+target_compile_definitions(ufs-driver PRIVATE
+ _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_UFS_MAJOR=2 IFS_UFS_V2_PRODUCTION=1)
+target_compile_options(ufs-driver PRIVATE
+ -Wall -Wextra -Wpedantic -Werror -ffunction-sections -fdata-sections -fvisibility=hidden)
+target_link_options(ufs-driver PRIVATE
+ -Wl,-z,defs -Wl,--gc-sections
+ "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/module/v2-only.map")
 target_include_directories(ufs-driver PRIVATE
  "${CMAKE_CURRENT_SOURCE_DIR}/native" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}")
@@ -44,6 +45,9 @@ if(BUILD_TESTING)
   "${CMAKE_CURRENT_SOURCE_DIR}/native")
  target_link_libraries(ufs-module-test PRIVATE ufs-driver InfiltratrCommon::Common)
  add_test(NAME ufs-module-interface COMMAND ufs-module-test)
+ add_test(NAME ufs2-only-common-v2-export
+   COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_v2_exports.sh"
+     "$<TARGET_FILE:ufs-driver>")
 endif()
 install(TARGETS ufs-driver LIBRARY DESTINATION /System/Filesystems)
 # Runtime payload: one filesystem shared object and its single PDF manual.

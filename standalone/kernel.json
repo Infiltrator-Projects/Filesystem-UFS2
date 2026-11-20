@@ -1,10 +1,1 @@
-{
-  "name": "ufs2",
-  "directory": "native/filesystems/ufs/linux",
-  "paths": [
-    "native/filesystems/ufs"
-  ],
-  "make_args": [
-    "CONFIG_UFS_FS=m"
-  ]
-}
+null
