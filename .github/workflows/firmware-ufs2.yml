@@ -37,6 +37,14 @@ jobs:
             4b2fa8eaa116b7e719329c5bbaa39ee3a093fbe1c1eac0c57440d0f82217d8a5 \
             "$RUNNER_TEMP/$boot" | sha256sum -c -
           dpkg-deb -x "$RUNNER_TEMP/$boot" "$RUNNER_TEMP/boot"
-          "$RUNNER_TEMP/boot/usr/lib/infiltrator-boot/validate-module" \
-            build/firmware/UFS2.so
-          echo UFS2_NATIVE_FREESTANDING_ELF_VALIDATOR_PASS
+          validator="$RUNNER_TEMP/boot/usr/lib/infiltrator-boot/validate-module"
+          "$validator" build/firmware/UFS2.so
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+          DESTDIR="$RUNNER_TEMP/stage" cmake --install build
+          module="$RUNNER_TEMP/stage/System/Filesystems/UFS2.so"
+          test -s "$module"
+          readelf -SW "$module" | grep -F '.infiltrator_boot'
+          "$validator" "$module"
+          cmp build/UFS2.so "$module"
+          echo UFS2_NATIVE_FREESTANDING_AND_HOSTED_ELF_VALIDATOR_PASS

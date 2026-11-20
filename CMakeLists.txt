@@ -57,6 +57,20 @@ add_custom_command(OUTPUT "${UFS2_FIRMWARE_ELF}"
   "${infiltratr_common_SOURCE_DIR}/include/infiltratr/filesystem_module_v2.h"
  VERBATIM)
 add_custom_target(ufs2-firmware-elf DEPENDS "${UFS2_FIRMWARE_ELF}")
+# The installed file remains one hosted shared object: the same freestanding
+# V2 ELF is embedded byte-for-byte in its non-allocated BOOT section.
+if(NOT CMAKE_OBJCOPY)
+ find_program(CMAKE_OBJCOPY NAMES objcopy llvm-objcopy REQUIRED)
+endif()
+add_dependencies(ufs-driver ufs2-firmware-elf)
+set_property(TARGET ufs-driver APPEND PROPERTY LINK_DEPENDS "${UFS2_FIRMWARE_ELF}")
+add_custom_command(TARGET ufs-driver POST_BUILD
+ COMMAND "${CMAKE_OBJCOPY}" --add-section
+  ".infiltrator_boot=${UFS2_FIRMWARE_ELF}"
+  --set-section-flags .infiltrator_boot=readonly
+  "$<TARGET_FILE:ufs-driver>"
+ VERBATIM)
+
 
 if(BUILD_TESTING)
  add_executable(ufs-module-test tests/test_module.c)

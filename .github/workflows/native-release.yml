@@ -50,6 +50,10 @@ jobs:
   # Only a passing source/package qualification may publish. This is a hosted
   # Common V2 release, NOT a BOOT firmware qualification or release.
   publish-hosted:
+    # The old hosted-only 1.0.18 release remains immutable. Do not publish
+    # the new firmware carrier until OVMF kernel/initramfs and media integrity
+    # qualifications have passed against this exact source revision.
+    if: false
     needs: qualify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
