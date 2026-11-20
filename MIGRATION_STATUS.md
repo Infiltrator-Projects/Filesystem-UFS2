@@ -14,5 +14,8 @@ RUN qualification workflows do not publish Linux .ko substitutes.
 The current module is **NOT a BOOT-qualified release**. A freestanding ELF
 using the shared engine, unmodified production BOOT validator acceptance,
 and OVMF kernel/initramfs reads with corrupted media and nonmutation checks
-remain necessary. The hosted reader's single mounted-volume session is
-also a known limitation requiring follow-up independent-session support.
+remain necessary. Multiple concurrent hosted Common V2 read-only sessions now have distinct,
+non-recycled opaque tokens and independent per-volume inode inventories.
+Mounted sessions can be closed in any order without invalidating peers;
+regression tests exercise two simultaneous mounts, stale handles and
+byte-for-byte source-media nonmutation.
