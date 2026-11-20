@@ -40,9 +40,9 @@ fi
 sha256sum "$media" > "$work/source.sha256"
 truncate -s 64M "$esp"
 mkfs.fat -F 32 "$esp"
-mmd -i "$esp" ::/EFI ::/EFI/BOOT ::/EFI/BOOT/filesystems_x64
+mmd -i "$esp" ::/EFI ::/EFI/BOOT ::/EFI/BOOT/drivers_x64
 mcopy -i "$esp" "$boot" ::/EFI/BOOT/BOOTX64.EFI
-mcopy -i "$esp" "$module" ::/EFI/BOOT/filesystems_x64/UFS2.so
+mcopy -i "$esp" "$module" ::/EFI/BOOT/drivers_x64/UFS2.so
 truncate -s 220M "$disk"
 sgdisk --clear --new=1:2048:+64M --typecode=1:ef00 \
       --new=2:133120:+128M --typecode=2:8300 "$disk"
