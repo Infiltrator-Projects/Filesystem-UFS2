@@ -186,11 +186,11 @@ install_native() {
     echo 'OS package mode forbids manual --kernel-build' >&2; return 2
   fi
   check_tools install
-  if ((!system_mode)); then
-    if [[ -z $selected_kernel ]]; then selected_kernel="/lib/modules/$(uname -r)/build"; fi
-    test -s "$selected_kernel/Module.symvers" || {
-      echo 'Prepared running-kernel source and Module.symvers required' >&2; return 1;
-    }
+  # Common V2 SO is the only runtime filesystem. Legacy Linux kernel
+  # adapters may remain in repository source, but no installer builds a .ko.
+  if [[ -n $selected_kernel ]]; then
+    echo 'Filesystem-specific Linux kernel modules are not runtime releases' >&2
+    return 2
   fi
   local version_suffix=''
   if [[ $profile == aggressive ]]; then version_suffix='+native1'; fi
@@ -217,6 +217,8 @@ action=$1; shift
 case $action in
   release) (($# == 0)) || exit 2; release;;
   install) install_native "$@";;
-  bundle-kernel) bundle_kernel "$@";;
+  bundle-kernel)
+    echo 'Obsolete Linux kernel module release path is disabled' >&2
+    exit 2;;
   *) echo "Unknown UFS2 native action: $action" >&2; exit 2;;
 esac
