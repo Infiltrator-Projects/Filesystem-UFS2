@@ -38,6 +38,26 @@ target_include_directories(ufs-driver PRIVATE
  "${CMAKE_CURRENT_SOURCE_DIR}/native" "${CMAKE_CURRENT_SOURCE_DIR}/compat"
  "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(ufs-driver PRIVATE InfiltratrCommon::Common OpenSSL::Crypto)
+
+# Freestanding reader uses exactly the native sources and Common V2 callbacks
+# of the hosted module. It is deliberately not embedded or published before
+# passing the production BOOT validator and real UEFI read integration.
+set(UFS2_FIRMWARE_DIR "${CMAKE_CURRENT_BINARY_DIR}/firmware")
+set(UFS2_FIRMWARE_ELF "${UFS2_FIRMWARE_DIR}/UFS2.so")
+add_custom_command(OUTPUT "${UFS2_FIRMWARE_ELF}"
+ COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_CURRENT_SOURCE_DIR}/module/firmware"
+  -B "${UFS2_FIRMWARE_DIR}" -DCMAKE_BUILD_TYPE=Release
+  "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
+  "-DCOMMON_INCLUDE_DIR=${infiltratr_common_SOURCE_DIR}/include"
+  "-DCOMMON_SOURCE_DIR=${infiltratr_common_SOURCE_DIR}"
+ COMMAND "${CMAKE_COMMAND}" --build "${UFS2_FIRMWARE_DIR}" --parallel 2
+ DEPENDS module/firmware/CMakeLists.txt module/firmware/runtime.c
+  native/ufs_native.c module/ufs_module.c
+  "${infiltratr_common_SOURCE_DIR}/src/arithmetic.c"
+  "${infiltratr_common_SOURCE_DIR}/include/infiltratr/filesystem_module_v2.h"
+ VERBATIM)
+add_custom_target(ufs2-firmware-elf DEPENDS "${UFS2_FIRMWARE_ELF}")
+
 if(BUILD_TESTING)
  add_executable(ufs-module-test tests/test_module.c)
  target_include_directories(ufs-module-test PRIVATE

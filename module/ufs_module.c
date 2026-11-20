@@ -6,6 +6,9 @@
 #include <infiltratr/filesystem_module_v2.h>
 #include <stdint.h>
 #include "ufs_native.h"
+#ifdef IFS_UFS_FIRMWARE_BUILD
+extern void ifs_ufs_firmware_bind_host(const IfsFsHostRuntimeV2 *);
+#endif
 
 __attribute__((used,retain,section(".ifsmeta")))
 static const char identity[] = "IFS-MODULE:ufs2:common2";
@@ -153,6 +156,9 @@ static int query_volume(void *volume, IfsFsVolumeInfoV2 *info)
 }
 static int ensure_inventory(Ufs2Session *slot)
 {
+#ifdef IFS_UFS_FIRMWARE_BUILD
+    ifs_ufs_firmware_bind_host(slot->host);
+#endif
     if (!slot->map_inventory)
         return ufs_map_host_open_v2(slot->host, &slot->summary,
                                     &slot->map_inventory);
@@ -232,7 +238,11 @@ static const IfsFsModuleApiV2 api = {
     .abi_version = IFS_FS_COMMON_ABI_V2,
     .structure_bytes = sizeof(IfsFsModuleApiV2),
     .format_id = "ufs2",
+    #ifdef IFS_UFS_FIRMWARE_BUILD
+    .runtime_profiles = IFS_FS_PROFILE_FREESTANDING | IFS_FS_PROFILE_FIRMWARE,
+#else
     .runtime_profiles = IFS_FS_PROFILE_HOSTED,
+#endif
     .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG),

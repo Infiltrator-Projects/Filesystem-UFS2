@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Independent freestanding engineering gate; no release or live ESP writes.
+name: Qualify UFS2 native freestanding Common V2 ELF
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ufs2-firmware:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and ELF validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential binutils cmake git libssl-dev
+      - name: Build actual native UFS2 engine in freestanding profile
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build build --target ufs2-firmware-elf --parallel 2
+          test -s build/firmware/UFS2.so
+          ! readelf -dW build/firmware/UFS2.so | grep '(NEEDED)'
+          nm -D --defined-only build/firmware/UFS2.so | grep -F 'infiltrator_filesystem_api_v2'
+          ! nm -u build/firmware/UFS2.so | grep .
+      - name: Use unmodified BOOT 0.1.77 binary validator
+        run: |
+          set -euo pipefail
+          boot=infiltrator-boot_0.1.77_amd64.deb
+          curl -fsSL --retry 3 \
+            "https://github.com/Infiltrator-Projects/Boot/releases/download/v0.1.77/$boot" \
+            -o "$RUNNER_TEMP/$boot"
+          printf '%s  %s\n' \
+            4b2fa8eaa116b7e719329c5bbaa39ee3a093fbe1c1eac0c57440d0f82217d8a5 \
+            "$RUNNER_TEMP/$boot" | sha256sum -c -
+          dpkg-deb -x "$RUNNER_TEMP/$boot" "$RUNNER_TEMP/boot"
+          "$RUNNER_TEMP/boot/usr/lib/infiltrator-boot/validate-module" \
+            build/firmware/UFS2.so
+          echo UFS2_NATIVE_FREESTANDING_ELF_VALIDATOR_PASS
