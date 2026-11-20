@@ -1758,8 +1758,7 @@ int ufs_read_host_v2(void *handle,const char *path,uint64_t offset,
         physical=ref->physical_fragment*s->fragment_size;
         span=(uint64_t)ref->span_fragments*s->fragment_size;
         if(!span || logical<prev_end ||
-           logical>=file->size || span>file->size-logical &&
-             span>UINT64_MAX-logical ||
+           logical>=file->size || span>UINT64_MAX-logical ||
            physical>inv->physical_bytes ||
            span>inv->physical_bytes-physical)
             return IFS_FS_CORRUPT;
