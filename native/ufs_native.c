@@ -1619,6 +1619,170 @@ static int ufs_v2_find_path(const UfsInventory *inv,const char *path,
     return IFS_FS_OK;
 }
 
+/* Common V2 hosted namespace adapter over the same verified inode,
+ * extent and BSD directory trees as DEFRAG.MAP. Never consult a Linux VFS
+ * reader or a host pathname to resolve an on-media file. */
+static int ufs_v2_fill_entry(IfsFsEntryV2 *entry,
+                             const UfsFileRecord *record,
+                             const char *name, size_t name_bytes)
+{
+    if(!entry || !record || !name ||
+       entry->structure_bytes<sizeof(*entry) || !entry->name)
+        return IFS_FS_INVALID;
+    if(name_bytes>=entry->name_capacity || name_bytes>255u)
+        return IFS_FS_NO_SPACE;
+    memcpy(entry->name,name,name_bytes);
+    entry->name[name_bytes]='\0';
+    entry->name_bytes=(uint32_t)name_bytes;
+    entry->size_bytes=record->size;
+    entry->attributes=record->mode;
+    entry->type=record->directory?IFS_FS_ENTRY_DIRECTORY:IFS_FS_ENTRY_FILE;
+    return IFS_FS_OK;
+}
+int ufs_stat_host_v2(void *handle,const char *path,IfsFsEntryV2 *entry)
+{
+    const UfsInventory *inv=handle;
+    const UfsFileRecord *record=NULL;
+    const char *base,*cursor;
+    int rc;
+    if(!inv || !inv->host || !entry || !path)return IFS_FS_INVALID;
+    rc=ufs_v2_find_path(inv,path,&record);
+    if(rc!=IFS_FS_OK)return rc;
+    base=path;
+    for(cursor=path;*cursor;++cursor)
+        if(*cursor=='/')base=cursor+1;
+    if(!*base)base="/";
+    return ufs_v2_fill_entry(entry,record,base,strlen(base));
+}
+int ufs_list_host_v2(void *handle,const char *path,uint32_t index,
+                     IfsFsEntryV2 *entry)
+{
+    const UfsInventory *inv=handle;
+    const UfsFileRecord *dir=NULL;
+    const LdUfsSummary *s;
+    uint8_t *data;
+    uint32_t ordinal=0u;
+    int rc;
+    if(!inv || !inv->host || !entry)return IFS_FS_INVALID;
+    rc=ufs_v2_find_path(inv,path,&dir);
+    if(rc!=IFS_FS_OK)return rc;
+    if(!dir->directory)return IFS_FS_INVALID;
+    if(dir->sparse)return IFS_FS_UNSUPPORTED;
+    s=&inv->summary;
+    if(!s->block_size)return IFS_FS_CORRUPT;
+    data=malloc(s->block_size);
+    if(!data)return IFS_FS_NO_MEMORY;
+    rc=IFS_FS_END;
+    for(uint32_t b=0u;b<dir->block_count;++b){
+        const UfsBlockRef *ref=&inv->blocks[dir->first_block+b];
+        uint64_t logical,physical,available,span;
+        if(ref->logical_block>UINT64_MAX/s->block_size ||
+           ref->physical_fragment>UINT64_MAX/s->fragment_size ||
+           ref->span_fragments>UINT64_MAX/s->fragment_size){
+            rc=IFS_FS_CORRUPT;break;
+        }
+        logical=ref->logical_block*s->block_size;
+        physical=ref->physical_fragment*s->fragment_size;
+        span=(uint64_t)ref->span_fragments*s->fragment_size;
+        if(logical>=dir->size || physical>inv->physical_bytes ||
+           span>inv->physical_bytes-physical){
+            rc=IFS_FS_CORRUPT;break;
+        }
+        available=dir->size-logical;
+        if(available>s->block_size)available=s->block_size;
+        if(available>span)available=span;
+        if(available<8u || inventory_read_exact_at(inv,data,(size_t)available,
+                   physical,NULL,0u,"invalid UFS directory data")){
+            rc=IFS_FS_CORRUPT;break;
+        }
+        for(uint32_t pos=0u;pos<available;){
+            const bool little=ufs_little_endian(s->variant);
+            if(available-pos<8u){rc=IFS_FS_CORRUPT;goto finish_list;}
+            const uint32_t inode=read_u32(data+pos,little);
+            const uint16_t record=little?
+                infiltratr_load_le16(data+pos+4u):
+                infiltratr_load_be16(data+pos+4u);
+            const uint8_t length=data[pos+7u];
+            if(record<8u || (record&3u) || record>available-pos ||
+               (uint32_t)length+8u>record){
+                rc=IFS_FS_CORRUPT;goto finish_list;
+            }
+            const char *name=(const char *)(data+pos+8u);
+            if(inode && length &&
+               !(length==1u && name[0]=='.') &&
+               !(length==2u && name[0]=='.' && name[1]=='.')){
+                if(ordinal==index){
+                    const UfsFileRecord *child=ufs_v2_record(inv,inode);
+                    rc=child?ufs_v2_fill_entry(entry,child,name,length):
+                        IFS_FS_CORRUPT;
+                    goto finish_list;
+                }
+                if(ordinal==UINT32_MAX){rc=IFS_FS_CORRUPT;goto finish_list;}
+                ++ordinal;
+            }
+            pos+=record;
+        }
+    }
+finish_list:
+    free(data);
+    return rc;
+}
+int ufs_read_host_v2(void *handle,const char *path,uint64_t offset,
+                     void *destination,uint32_t length)
+{
+    const UfsInventory *inv=handle;
+    const UfsFileRecord *file=NULL;
+    const LdUfsSummary *s;
+    uint64_t end,prev_end=0u;
+    int rc;
+    if(!inv || !inv->host || (!destination && length))
+        return IFS_FS_INVALID;
+    rc=ufs_v2_find_path(inv,path,&file);
+    if(rc!=IFS_FS_OK)return rc;
+    if(file->directory)return IFS_FS_INVALID;
+    if(offset>file->size || length>file->size-offset)
+        return IFS_FS_INVALID;
+    if(!length)return IFS_FS_OK;
+    s=&inv->summary;
+    end=offset+length;
+    /* Sparse sections are zero only after the entire extent map is checked. */
+    for(uint32_t i=0u;i<file->block_count;++i){
+        const UfsBlockRef *ref=&inv->blocks[file->first_block+i];
+        uint64_t logical,physical,span;
+        if(!s->block_size || !s->fragment_size ||
+           ref->logical_block>UINT64_MAX/s->block_size ||
+           ref->physical_fragment>UINT64_MAX/s->fragment_size ||
+           ref->span_fragments>UINT64_MAX/s->fragment_size)
+            return IFS_FS_CORRUPT;
+        logical=ref->logical_block*s->block_size;
+        physical=ref->physical_fragment*s->fragment_size;
+        span=(uint64_t)ref->span_fragments*s->fragment_size;
+        if(!span || logical<prev_end ||
+           logical>=file->size || span>file->size-logical &&
+             span>UINT64_MAX-logical ||
+           physical>inv->physical_bytes ||
+           span>inv->physical_bytes-physical)
+            return IFS_FS_CORRUPT;
+        prev_end=logical+span;
+    }
+    memset(destination,0,length);
+    for(uint32_t i=0u;i<file->block_count;++i){
+        const UfsBlockRef *ref=&inv->blocks[file->first_block+i];
+        uint64_t begin=ref->logical_block*s->block_size;
+        uint64_t span=(uint64_t)ref->span_fragments*s->fragment_size;
+        uint64_t stop=begin+span;
+        if(stop>file->size)stop=file->size;
+        if(end<=begin || offset>=stop)continue;
+        const uint64_t lo=offset>begin?offset:begin;
+        const uint64_t hi=end<stop?end:stop;
+        const uint64_t phys=ref->physical_fragment*s->fragment_size+(lo-begin);
+        rc=ifs_fs_host_read_bytes_v2(inv->host,phys,
+            (uint8_t *)destination+(size_t)(lo-offset),(uint32_t)(hi-lo));
+        if(rc!=IFS_FS_OK)return rc;
+    }
+    return IFS_FS_OK;
+}
+
 /* Strict Common V2 DEFRAG.MAP: actual inode tree references, never a
  * synthetic bitmap or a relocation plan. Only host-backed read-only mounts
  * can call this entry. Sparse regions remain gaps in logical offsets.

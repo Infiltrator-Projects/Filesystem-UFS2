@@ -150,13 +150,46 @@ static const IfsFsDefragOpsV2 defrag_ops = {
                IFS_FS_GROUP_DEFRAG,0u,IFS_FS_DEFRAG_MAP},
     .map = map_path
 };
+static int ensure_inventory(void)
+{
+    if(!session.map_inventory)
+        return ufs_map_host_open_v2(session.host,&session.summary,
+                                    &session.map_inventory);
+    return IFS_FS_OK;
+}
+static int stat_path(void *volume,const char *path,IfsFsEntryV2 *entry)
+{
+    if(!live(volume))return IFS_FS_INVALID;
+    int rc=ensure_inventory();
+    return rc==IFS_FS_OK?ufs_stat_host_v2(session.map_inventory,path,entry):rc;
+}
+static int directory_entry(void *volume,const char *path,uint32_t index,
+                           IfsFsEntryV2 *entry)
+{
+    if(!live(volume))return IFS_FS_INVALID;
+    int rc=ensure_inventory();
+    return rc==IFS_FS_OK?
+        ufs_list_host_v2(session.map_inventory,path,index,entry):rc;
+}
+static int read_file(void *volume,const char *path,uint64_t offset,
+                     void *destination,uint32_t length)
+{
+    if(!live(volume))return IFS_FS_INVALID;
+    int rc=ensure_inventory();
+    return rc==IFS_FS_OK?
+        ufs_read_host_v2(session.map_inventory,path,offset,destination,length):rc;
+}
 static const IfsFsCoreOpsV2 core = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsCoreOpsV2),
                IFS_FS_GROUP_CORE, 0u,
-               IFS_FS_CORE_PROBE | IFS_FS_CORE_MOUNT},
+               IFS_FS_CORE_PROBE | IFS_FS_CORE_MOUNT |
+               IFS_FS_CORE_STAT | IFS_FS_CORE_LIST | IFS_FS_CORE_READ},
     .probe = probe,
     .mount = mount_volume,
-    .unmount = unmount_volume
+    .unmount = unmount_volume,
+    .stat = stat_path,
+    .directory_entry = directory_entry,
+    .read = read_file
 };
 static const IfsFsVolumeOpsV2 volume_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsVolumeOpsV2),

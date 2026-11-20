@@ -42,6 +42,11 @@ static void *host_allocate(void *context,size_t bytes)
 static void host_release(void *context,void *ptr)
 { (void)context;free(ptr); }
 
+static void put16(unsigned char *p,size_t at,uint16_t v,int little)
+{
+    for(unsigned i=0u;i<2u;++i)
+        p[at+i]=(unsigned char)(v>>(8u*(little?i:1u-i)));
+}
 static void put32(unsigned char *p,size_t at,uint32_t v,int little)
 {
     for (unsigned i=0u;i<4u;++i)
@@ -88,6 +93,50 @@ static int write_geometry(int fd,const unsigned char magic[4],int little,
     if(pwrite(fd,cg,sizeof cg,1024)!=(ssize_t)sizeof cg) return -1;
     return pwrite(fd,sb,sizeof sb,8192)==(ssize_t)sizeof sb ? 0:-1;
 }
+/* Real UFS2 256-byte inode namespace sharing the native V2 extent and
+ * BSD dirent implementation. No kernel or host pathname reader is involved. */
+static int write_file_fixture(int fd,int little)
+{
+    unsigned char cg[512]={0},root[256]={0},file[256]={0};
+    unsigned char directory[512]={0},payload[1024]={0};
+    put32(cg,4u,0x00090255u,little);
+    put32(cg,12u,0u,little);
+    put32(cg,20u,64u,little);
+    put32(cg,92u,168u,little);
+    put32(cg,96u,176u,little);
+    cg[168u]=(unsigned char)((1u<<2u)|(1u<<3u));
+    for(unsigned bit=22u;bit<64u;++bit)
+        cg[176u+(bit>>3u)]|=(unsigned char)(1u<<(bit&7u));
+    put16(root,0u,UINT16_C(0040755),little);
+    put64(root,16u,512u,little);
+    put64(root,112u,16u,little);
+    put16(file,0u,UINT16_C(0100644),little);
+    put64(file,16u,1024u,little);
+    put64(file,112u,18u,little);
+    put32(directory,0u,2u,little);
+    put16(directory,4u,12u,little);
+    directory[6u]=4u;directory[7u]=1u;
+    memcpy(directory+8u,".",1u);
+    put32(directory,12u,2u,little);
+    put16(directory,16u,12u,little);
+    directory[18u]=4u;directory[19u]=2u;
+    memcpy(directory+20u,"..",2u);
+    put32(directory,24u,3u,little);
+    put16(directory,28u,12u,little);
+    directory[30u]=8u;directory[31u]=4u;
+    memcpy(directory+32u,"test",4u);
+    put32(directory,36u,3u,little);
+    put16(directory,40u,476u,little);
+    directory[42u]=8u;directory[43u]=11u;
+    memcpy(directory+44u,"example.txt",11u);
+    memcpy(payload,"UFS2 native Common V2 inode data",32u);
+    return pwrite(fd,cg,sizeof(cg),1024)==(ssize_t)sizeof(cg) &&
+           pwrite(fd,root,sizeof(root),2048+2*256)==(ssize_t)sizeof(root) &&
+           pwrite(fd,file,sizeof(file),2048+3*256)==(ssize_t)sizeof(file) &&
+           pwrite(fd,directory,sizeof(directory),16*1024)==(ssize_t)sizeof(directory) &&
+           pwrite(fd,payload,sizeof(payload),18*1024)==(ssize_t)sizeof(payload)
+           ? 0:-1;
+}
 int main(void)
 {
     const IfsFsModuleApiV2 *api=infiltrator_filesystem_api_v2();
@@ -106,10 +155,12 @@ int main(void)
     CHECK(defrag->header.capabilities==IFS_FS_DEFRAG_MAP);
     CHECK(defrag->map && !defrag->plan && !defrag->execute &&
           !defrag->verify && !defrag->recover && !defrag->release_plan);
-    CHECK(core->header.capabilities==(IFS_FS_CORE_PROBE|IFS_FS_CORE_MOUNT));
+    CHECK(core->header.capabilities==(IFS_FS_CORE_PROBE|IFS_FS_CORE_MOUNT|
+           IFS_FS_CORE_STAT|IFS_FS_CORE_LIST|IFS_FS_CORE_READ));
     CHECK(ops->header.capabilities==IFS_FS_VOLUME_QUERY);
     CHECK(core->probe && core->mount && core->unmount && ops->query);
-    CHECK(!core->read && !core->write && !core->create && !core->remove);
+    CHECK(core->stat && core->directory_entry && core->read &&
+          !core->write && !core->create && !core->remove);
     CHECK(!ops->format && !ops->repair && !ops->sync);
     char path[]="/tmp/ufs2-v2-geometry-XXXXXX";
     int fd=mkstemp(path);
@@ -167,6 +218,31 @@ int main(void)
     CHECK(core->unmount(previous)==IFS_FS_INVALID);
     info.structure_bytes=sizeof(info);
     CHECK(ops->query(previous,&info)==IFS_FS_INVALID);
+    /* Fully populated UFS2 native filesystem fixtures qualify real reads. */
+    CHECK(write_file_fixture(fd,1)==0);
+    info.structure_bytes=sizeof(info);
+    CHECK(core->mount(&host,&session,&info)==IFS_FS_OK);
+    {
+        char name[256]={0},data[64]={0};
+        IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),.name=name,
+                            .name_capacity=sizeof(name)};
+        CHECK(core->stat(session,"/example.txt",&entry)==IFS_FS_OK);
+        CHECK(entry.type==IFS_FS_ENTRY_FILE &&
+              entry.size_bytes==1024u &&
+              strcmp(name,"example.txt")==0);
+        CHECK(core->directory_entry(session,"/",0u,&entry)==IFS_FS_OK &&
+              strcmp(name,"test")==0);
+        CHECK(core->directory_entry(session,"/",1u,&entry)==IFS_FS_OK &&
+              strcmp(name,"example.txt")==0);
+        CHECK(core->directory_entry(session,"/",2u,&entry)==IFS_FS_END);
+        CHECK(core->read(session,"/test",0u,data,32u)==IFS_FS_OK);
+        CHECK(memcmp(data,"UFS2 native Common V2 inode data",32u)==0);
+        CHECK(core->read(session,"/test",1024u,data,1u)==IFS_FS_INVALID);
+        CHECK(core->stat(session,"/missing",&entry)==IFS_FS_NOT_FOUND);
+        CHECK(core->read(session,"/../test",0u,data,4u)==IFS_FS_INVALID);
+        CHECK(core->read(session,"/",0u,data,4u)==IFS_FS_INVALID);
+    }
+    CHECK(core->unmount(session)==IFS_FS_OK);
     /* A valid superblock with a corrupted cylinder-group free map must be
      * rejected rather than exposing unverified recorded free totals. */
     unsigned char damaged=0u;
