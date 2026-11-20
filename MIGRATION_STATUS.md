@@ -1,21 +1,23 @@
-# UFS2 Common V2 migration status
+# UFS2 Common V2 migration and BOOT qualification
 
-Hosted UFS2.so implements real native UFS2 LE/BE geometry, cylinder-group
-bitmap validation, read-only inode and directory inventory, V2 STAT, LIST,
-READ and actual byte-range file content through the partition-relative host,
-plus its original real DEFRAG.MAP functionality. Disposable native UFS2
-fixtures exercise these functions, invalid paths and media failures.
+The canonical installed UFS2.so uses the same native source-owned UFS decoder
+and Common V2 callbacks for its hosted and freestanding profiles. The complete
+no-import freestanding ELF is embedded in the hosted shared object's
+.infiltrator_boot section. The module exposes only the Common V2 ABI.
 
-The installed production .so links only the native engine and Common V2
-adapter. The old Linux VFS adapter, worker, formatter and legacy V1 code remain
-as source, but are not linked to production. The two-file Debian and source
-RUN qualification workflows do not publish Linux .ko substitutes.
+The native reader performs real partition-relative PROBE/MOUNT/UNMOUNT,
+STAT/LIST/READ and DEFRAG.MAP through bounded, read-only Common V2 hosts.
+Multiple mounted volumes use independent session tokens and inode inventories.
+Historical analyser and writer sources remain available without supplying a
+runtime V1, kernel .ko, FUSE or Linux VFS fallback.
 
-The current module is **NOT a BOOT-qualified release**. A freestanding ELF
-using the shared engine, unmodified production BOOT validator acceptance,
-and OVMF kernel/initramfs reads with corrupted media and nonmutation checks
-remain necessary. Multiple concurrent hosted Common V2 read-only sessions now have distinct,
-non-recycled opaque tokens and independent per-volume inode inventories.
-Mounted sessions can be closed in any order without invalidating peers;
-regression tests exercise two simultaneous mounts, stale handles and
-byte-for-byte source-media nonmutation.
+The unchanged BOOT 0.1.77 production validator accepts the standalone ELF
+and installed shared object. Disposable OVMF tests read a real EFI-stub Linux
+kernel and initramfs through UFS2.so, verify the initramfs marker, refuse
+a corrupted superblock and check source-media nonmutation byte-for-byte.
+The BOOT staging directory is EFI/BOOT/drivers_x64.
+
+A new release requires the portable and CPU-native source RUN shared objects
+to pass the same validator and all hosted and OVMF jobs to pass for the
+identical main commit. Physical Secure Boot/MOK policy remains an independent
+hardware/environment gate; no machine configuration is changed by these tests.
