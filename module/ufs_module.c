@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include "ufs_native.h"
 
-__attribute__((used,section(".ifsmeta")))
+__attribute__((used,retain,section(".ifsmeta")))
 static const char identity[] = "IFS-MODULE:ufs2:common2";
 
 static int inspect(const IfsFsHostRuntimeV2 *host, LdUfsSummary *summary)
