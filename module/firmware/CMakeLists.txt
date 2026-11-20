@@ -12,12 +12,14 @@ add_library(ufs2-boot MODULE
   ../../module/ufs_module.c
   ../../native/ufs_native.c
   "${COMMON_SOURCE_DIR}/src/arithmetic.c"
+  "${COMMON_SOURCE_DIR}/src/core.c"
   runtime.c)
 set_target_properties(ufs2-boot PROPERTIES
   PREFIX "" OUTPUT_NAME "UFS2" SUFFIX ".so" C_VISIBILITY_PRESET hidden)
 target_compile_features(ufs2-boot PRIVATE c_std_11)
 target_include_directories(ufs2-boot PRIVATE
   "${COMMON_INCLUDE_DIR}"
+  "${COMMON_SOURCE_DIR}/src"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../native"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../compat")
 target_compile_definitions(ufs2-boot PRIVATE
