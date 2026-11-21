@@ -7,7 +7,6 @@ cd "$root"
 package=infiltrator-filesystem-ufs2
 module=UFS2.so
 repository=Filesystem-UFS2
-kernel_path=System/Kernel/Filesystems/ufs2.ko
 version=$(tr -d '\r\n' < VERSION)
 [[ $version =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] || { echo 'Invalid VERSION' >&2; exit 1; }
 work=$(mktemp -d)
@@ -45,19 +44,9 @@ runtime_deps() {
   done < <(readelf -d "$so" | sed -n 's/.*Shared library: \[\([^]]*\)\].*/\1/p')
   printf '%s\n' "$result"
 }
-kernel_release() {
-  test -s "$1/include/generated/utsrelease.h" && test -s "$1/Module.symvers"
-  sed -n 's/^#define UTS_RELEASE "\([^"]*\)"$/\1/p' "$1/include/generated/utsrelease.h"
-}
-kernel_verify() {
-  test -f "$1" && test ! -L "$1"
-  readelf -W -h "$1" | grep -Eq '^[[:space:]]*Type:[[:space:]]*REL[[:space:]]'
-  readelf -W -h "$1" | grep -F 'Advanced Micro Devices X86-64' >/dev/null
-  readelf -W -p .modinfo "$1" | grep -Eq 'name=ufs2([[:space:]]|$)'
-  readelf -W -p .modinfo "$1" | grep -F "vermagic=$2 " >/dev/null
-}
+
 build_deb() {
-  local profile=$1 destination=$2 prepared_kernel=$3
+  local profile=$1 destination=$2
   local stage="$work/package-root"
   rm -rf "$stage"
   mkdir -p "$stage/System/Filesystems" "$stage/System/Resources/Documentation" "$stage/DEBIAN"
@@ -89,28 +78,13 @@ build_deb() {
     printf 'X-Infiltrator-Resource-SHA256: %s\n' "$(sha256sum "$so" | cut -d' ' -f1)"
     printf 'X-Infiltrator-PDF-SHA256: %s\n' "$(sha256sum "$pdf" | cut -d' ' -f1)"
   } > "$stage/DEBIAN/control"
-  local krel=''
-  if [[ -n $prepared_kernel ]]; then
-    local ko="$stage/$kernel_path"
-    mkdir -p "$(dirname "$ko")"
-    bash standalone/kernel.sh "$ko" "$prepared_kernel"
-    krel=$(kernel_release "$prepared_kernel")
-    kernel_verify "$ko" "$krel"
-    {
-      printf 'X-Infiltrator-Kernel-SHA256: %s\n' "$(sha256sum "$ko" | cut -d' ' -f1)"
-      printf 'X-Infiltrator-Kernel-Release: %s\n' "$krel"
-    } >> "$stage/DEBIAN/control"
-  fi
   {
     printf 'Description: Independent UFS2 filesystem shared object for InfiltratorOS\n'
     printf ' Installs UFS2.so and its illustrated PDF.\n'
-    if [[ -n $prepared_kernel ]]; then printf ' Includes the Linux kernel module for manual use.\n'; fi
   } >> "$stage/DEBIAN/control"
   mkdir -p "$(dirname "$destination")"
   dpkg-deb --root-owner-group --build "$stage" "$destination"
-  if [[ -n $krel ]]; then
-    bash standalone/check-package.sh "$destination" --profile "$profile" --kernel-release "$krel"
-  else bash standalone/check-package.sh "$destination" --profile "$profile"; fi
+  bash standalone/check-package.sh "$destination" --profile "$profile"
 }
 make_run() {
   local destination=$1 archive="$work/source.tar.gz"
@@ -137,44 +111,20 @@ release() {
   test -z "$(find dist -mindepth 1 -maxdepth 1 -print -quit)" || {
     echo 'Refusing to mix release artifacts' >&2; exit 1;
   }
-  build_deb portable "dist/$package"_"$version"_amd64.deb ''
+  build_deb portable "dist/$package"_"$version"_amd64.deb
   make_run "dist/filesystem-ufs2-$version-native-installer.run"
   test "$(find dist -maxdepth 1 -type f | wc -l)" = 2
 }
-bundle_kernel() {
-  (($# == 3)) || { echo 'bundle-kernel PACKAGE KERNEL OUTPUT' >&2; exit 2; }
-  local input=$1 ko=$2 output=$3
-  test -f "$input" && test -f "$ko"
-  test "$(dpkg-deb -f "$input" Package)" = "$package"
-  test "$(dpkg-deb -f "$input" Version)" = "$version"
-  test "$(dpkg-deb -f "$input" X-Infiltrator-Native-Profile)" = portable
-  test "$(dpkg-deb -f "$input" X-Infiltrator-Source-Revision)" = "$(revision)"
-  local stage="$work/kernel-bundle"
-  mkdir -p "$stage"
-  dpkg-deb --raw-extract "$input" "$stage"
-  test ! -e "$stage/$kernel_path"
-  mkdir -p "$stage/System/Kernel/Filesystems"
-  install -m 0644 "$ko" "$stage/$kernel_path"
-  local release=6.12.107
-  kernel_verify "$stage/$kernel_path" "$release"
-  {
-    printf 'X-Infiltrator-Kernel-SHA256: %s\n' "$(sha256sum "$ko" | cut -d' ' -f1)"
-    printf 'X-Infiltrator-Kernel-Release: %s\n' "$release"
-  } >> "$stage/DEBIAN/control"
-  mkdir -p "$(dirname "$output")"
-  dpkg-deb --root-owner-group --build "$stage" "$output"
-  bash standalone/check-package.sh "$output" --profile portable --kernel-release "$release"
-}
+
 install_native() {
-  local profile=aggressive system_mode=0 build_only=0 output='' selected_kernel=''
+  local profile=aggressive build_only=0 output=''
   while (($#)); do
     case $1 in
       --profile) profile=$2; shift 2;;
-      --kernel-build) selected_kernel=$2; shift 2;;
       --output) output=$2; shift 2;;
       --build-only) build_only=1; shift;;
-      --system-package-mode) system_mode=1; shift;;
-      --help|-h) echo 'UFS2 [--profile aggressive|portable] [--kernel-build PATH] [--build-only --output PATH]'; return 0;;
+      --system-package-mode) shift;; # obsolete compatibility flag, no alternative ABI
+      --help|-h) echo 'UFS2 [--profile aggressive|portable] [--build-only --output PATH]'; return 0;;
       *) echo "Unknown native installer option: $1" >&2; return 2;;
     esac
   done
@@ -182,16 +132,7 @@ install_native() {
   if ((build_only)) && [[ -z $output ]]; then
     echo 'Build-only requires --output DIRECTORY' >&2; return 2
   fi
-  if ((system_mode)) && [[ -n $selected_kernel ]]; then
-    echo 'OS package mode forbids manual --kernel-build' >&2; return 2
-  fi
   check_tools install
-  # Common V2 SO is the only runtime filesystem. Legacy Linux kernel
-  # adapters may remain in repository source, but no installer builds a .ko.
-  if [[ -n $selected_kernel ]]; then
-    echo 'Filesystem-specific Linux kernel modules are not runtime releases' >&2
-    return 2
-  fi
   local version_suffix=''
   if [[ $profile == aggressive ]]; then version_suffix='+native1'; fi
   local filename="$package"_"$version$version_suffix"_amd64.deb
@@ -199,7 +140,7 @@ install_native() {
   if ((build_only)); then target_dir=$(realpath -m "$output"); fi
   mkdir -p "$target_dir"
   local target="$target_dir/$filename"
-  build_deb "$profile" "$target" "$selected_kernel"
+  build_deb "$profile" "$target"
   if ((build_only)); then printf '%s\n' "$target"; return 0; fi
   if ((EUID == 0)); then dpkg -i "$target"; else sudo dpkg -i "$target"; fi
   local installed="/System/Filesystems/$module"
@@ -212,13 +153,10 @@ install_native() {
   dpkg-query -S "$pdf" | grep -F "$package:" >/dev/null
   echo "Installed and verified $installed"
 }
-(($# > 0)) || { echo 'usage: release.sh release|install|bundle-kernel' >&2; exit 2; }
+(($# > 0)) || { echo 'usage: release.sh release|install' >&2; exit 2; }
 action=$1; shift
 case $action in
   release) (($# == 0)) || exit 2; release;;
   install) install_native "$@";;
-  bundle-kernel)
-    echo 'Obsolete Linux kernel module release path is disabled' >&2
-    exit 2;;
   *) echo "Unknown UFS2 native action: $action" >&2; exit 2;;
 esac
