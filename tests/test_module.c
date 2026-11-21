@@ -232,6 +232,19 @@ int main(void)
     void *parallel=NULL;
     CHECK(core->mount(&host,&parallel,&info)==IFS_FS_OK &&
           parallel!=NULL && parallel!=session);
+    /* A firmware or hosted caller may reuse its stack descriptor after
+     * mount. The reader must own a bounded V2 descriptor snapshot; only
+     * the separately managed context and callbacks retain host lifetime. */
+    {
+        const IfsFsHostRuntimeV2 original = host;
+        char data[32] = {0};
+        host.read_at = host_read_failure;
+        host.logical_sector_bytes = 4096u;
+        CHECK(core->read(session,"/test",0u,data,32u)==IFS_FS_OK);
+        CHECK(memcmp(data,"UFS2 native Common V2 inode data",32u)==0);
+        CHECK(core->read(parallel,"/test",0u,data,32u)==IFS_FS_OK);
+        host = original;
+    }
     {
         char name[256]={0},data[64]={0};
         IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),.name=name,
