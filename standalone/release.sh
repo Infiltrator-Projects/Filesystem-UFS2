@@ -92,7 +92,8 @@ make_run() {
   git -C "$root" rev-parse --git-dir >/dev/null || { echo 'Release needs a Git checkout' >&2; return 1; }
   git ls-files -z | while IFS= read -r -d '' member; do
     case "$member" in
-      docs/UFS.pdf|standalone/kernel.sh|standalone/kernel.json) continue;;
+      docs/UFS.pdf|standalone/kernel.sh|standalone/kernel.json|*/infiltratr/filesystem_module.h) continue;;
+      native/filesystems/*/linux/*|native/filesystems/*/efi/*|native/filesystems/*/windows/*|native/platform/linux_kernel/*) continue;;
     esac
     [[ -f $member && ! -L $member ]] || { echo "Invalid source archive member: $member" >&2; exit 1; }
     mkdir -p "$work/source/$(dirname "$member")"

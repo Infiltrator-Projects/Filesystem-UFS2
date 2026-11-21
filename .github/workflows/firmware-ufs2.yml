@@ -26,18 +26,11 @@ jobs:
           ! readelf -dW build/firmware/UFS2.so | grep '(NEEDED)'
           nm -D --defined-only build/firmware/UFS2.so | grep -F 'infiltrator_filesystem_api_v2'
           ! nm -u build/firmware/UFS2.so | grep .
-      - name: Use unmodified BOOT 0.1.77 binary validator
+      - name: Use unmodified rebuilt BOOT binary validator
         run: |
           set -euo pipefail
-          boot=infiltrator-boot_0.1.77_amd64.deb
-          curl -fsSL --retry 3 \
-            "https://github.com/Infiltrator-Projects/Boot/releases/download/v0.1.77/$boot" \
-            -o "$RUNNER_TEMP/$boot"
-          printf '%s  %s\n' \
-            c70fd0bec2d6a2728e9ceddb4149c58ef63955ecfe42184a18ea960ede6a1c5c \
-            "$RUNNER_TEMP/$boot" | sha256sum -c -
-          dpkg-deb -x "$RUNNER_TEMP/$boot" "$RUNNER_TEMP/boot"
-          validator="$RUNNER_TEMP/boot/usr/lib/infiltrator-boot/validate-module"
+          source tests/require-rebuilt-boot.sh
+          validator="$IFS_BOOT_VALIDATOR"
           "$validator" build/firmware/UFS2.so
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
@@ -64,7 +57,7 @@ jobs:
           dpkg-deb -x "$RUNNER_TEMP"/linux-image-unsigned-*.deb "$RUNNER_TEMP/kernel"
           kernel="$RUNNER_TEMP/kernel/boot/vmlinuz-$release"
           test -s "$kernel"
-          boot="$RUNNER_TEMP/boot/usr/lib/infiltrator-boot/EFI/BOOT/BOOTX64.EFI"
+          boot="$IFS_BOOT_EFI"
           module="$RUNNER_TEMP/stage/System/Filesystems/UFS2.so"
           bash tests/firmware-ufs2.sh "$boot" "$module" "$kernel" \
             "$RUNNER_TEMP/ufs2-fixture-writer" "$RUNNER_TEMP/ufs2-boot"

@@ -41,18 +41,11 @@ jobs:
           test "$(find "$RUNNER_TEMP/root" -type f | wc -l)" = 2
           bash tests/check_v2_exports.sh "$RUNNER_TEMP/root/System/Filesystems/UFS2.so"
           test "$(find "$RUNNER_TEMP/root" -name '*.ko' | wc -l)" = 0
-      - name: Validate portable and CPU-native installed SO with BOOT 0.1.77
+      - name: Validate portable and CPU-native installed SO with rebuilt BOOT
         run: |
           set -euo pipefail
-          boot=infiltrator-boot_0.1.77_amd64.deb
-          curl -fsSL --retry 3 \
-            "https://github.com/Infiltrator-Projects/Boot/releases/download/v0.1.77/$boot" \
-            -o "$RUNNER_TEMP/$boot"
-          printf '%s  %s\n' \
-            c70fd0bec2d6a2728e9ceddb4149c58ef63955ecfe42184a18ea960ede6a1c5c \
-            "$RUNNER_TEMP/$boot" | sha256sum -c -
-          dpkg-deb -x "$RUNNER_TEMP/$boot" "$RUNNER_TEMP/boot"
-          validator="$RUNNER_TEMP/boot/usr/lib/infiltrator-boot/validate-module"
+          source tests/require-rebuilt-boot.sh
+          validator="$IFS_BOOT_VALIDATOR"
           for module in \
             "$RUNNER_TEMP/portable/System/Filesystems/UFS2.so" \
             "$RUNNER_TEMP/root/System/Filesystems/UFS2.so"; do
@@ -131,7 +124,7 @@ jobs:
             gh release create "$tag" dist/*.deb dist/*.run \
               --target "$GITHUB_SHA" \
               --title "UFS2 Common V2 firmware reader $version" \
-              --notes "Canonical UFS2.so hosts its freestanding ELF in the exact installed module. Full Common V2 native filesystem stat/list/read; real BOOT 0.1.77 validator on portable and native RUN binaries; disposable OVMF kernel/initramfs handoff; corrupted metadata rejection; byte-for-byte unchanged media. No V1 or .ko runtime fallback."
+              --notes "Canonical UFS2.so hosts its freestanding ELF in the exact installed module. Full Common V2 native filesystem stat/list/read; real rebuilt BOOT validator on portable and native RUN binaries; disposable OVMF kernel/initramfs handoff; corrupted metadata rejection; byte-for-byte unchanged media. No V1 or .ko runtime fallback."
           fi
           mkdir -p "$RUNNER_TEMP/release-check"
           gh release download "$tag" -p '*.deb' -p '*.run' \
