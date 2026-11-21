@@ -91,7 +91,9 @@ make_run() {
   mkdir -p "$work/source"
   git -C "$root" rev-parse --git-dir >/dev/null || { echo 'Release needs a Git checkout' >&2; return 1; }
   git ls-files -z | while IFS= read -r -d '' member; do
-    [[ $member == docs/UFS.pdf ]] && continue
+    case "$member" in
+      docs/UFS.pdf|standalone/kernel.sh|standalone/kernel.json) continue;;
+    esac
     [[ -f $member && ! -L $member ]] || { echo "Invalid source archive member: $member" >&2; exit 1; }
     mkdir -p "$work/source/$(dirname "$member")"
     cp -- "$member" "$work/source/$member"
