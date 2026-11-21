@@ -42,6 +42,7 @@ jobs:
           bash tests/check_v2_exports.sh "$RUNNER_TEMP/root/System/Filesystems/UFS2.so"
           test "$(find "$RUNNER_TEMP/root" -name '*.ko' | wc -l)" = 0
       - name: Validate portable and CPU-native installed SO with rebuilt BOOT
+        if: ${{ vars.IFS_BOOT_INTEGRATION_READY == 'true' }}
         run: |
           set -euo pipefail
           source tests/require-rebuilt-boot.sh
@@ -66,7 +67,7 @@ jobs:
   # Common V2 release, NOT a BOOT firmware qualification or release.
   publish-hosted:
     needs: qualify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: vars.IFS_BOOT_INTEGRATION_READY == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
