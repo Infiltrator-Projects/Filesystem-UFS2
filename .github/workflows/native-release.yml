@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Hosted V2 file namespace; firmware release requires freestanding ELF,
-# production BOOT validator and genuine OVMF Linux kernel/initramfs tests.
-name: Qualify and release UFS2 Common V2 BOOT-ready DEB and native RUN
+# BOOT integration is not part of the filesystem qualification workflow.
+name: Qualify and release UFS2 independent Common V2 DEB and native RUN
 on:
   push:
     branches: [main]
@@ -41,33 +41,17 @@ jobs:
           test "$(find "$RUNNER_TEMP/root" -type f | wc -l)" = 2
           bash tests/check_v2_exports.sh "$RUNNER_TEMP/root/System/Filesystems/UFS2.so"
           test "$(find "$RUNNER_TEMP/root" -name '*.ko' | wc -l)" = 0
-      - name: Validate portable and CPU-native installed SO with rebuilt BOOT
-        if: ${{ vars.IFS_BOOT_INTEGRATION_READY == 'true' }}
-        run: |
-          set -euo pipefail
-          source tests/require-rebuilt-boot.sh
-          validator="$IFS_BOOT_VALIDATOR"
-          for module in \
-            "$RUNNER_TEMP/portable/System/Filesystems/UFS2.so" \
-            "$RUNNER_TEMP/root/System/Filesystems/UFS2.so"; do
-            test -s "$module"
-            readelf -SW "$module" | grep -F '.infiltrator_boot'
-            "$validator" "$module"
-            ! nm -D --defined-only "$module" |
-              grep -E 'infiltrator_filesystem_.*_v1'
-          done
-          echo UFS2_BOTH_RELEASE_MODULES_BOOT_VALIDATOR_PASS
       - uses: actions/upload-artifact@v4
         with:
-          name: ufs2-boot-qualified-release
+          name: ufs2-common-v2-release
           path: dist/*
           if-no-files-found: error
 
-  # Only a passing source/package qualification may publish. This is a hosted
-  # Common V2 release, NOT a BOOT firmware qualification or release.
+  # Only a passing independent source/package qualification may publish.
+  # This does not qualify actual BOOT firmware integration.
   publish-hosted:
     needs: qualify
-    if: vars.IFS_BOOT_INTEGRATION_READY == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
@@ -79,29 +63,7 @@ jobs:
         with:
           name: ufs2-boot-qualified-release
           path: dist
-      - name: Require exact-head native V2 and actual UEFI boot success
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          endpoint="repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=100"
-          for attempt in $(seq 1 150); do
-            statuses=$(gh api "$endpoint" --jq '.workflow_runs[] | .name + ":" + (.conclusion // .status)')
-            if printf '%s\n' "$statuses" | grep -Fxq 'Qualify UFS2 native freestanding Common V2 ELF:failure' ||
-               printf '%s\n' "$statuses" | grep -Fxq 'UFS2 independently built shared object:failure'; then
-              echo 'UFS2 source or OVMF failed this commit' >&2
-              exit 1
-            fi
-            if printf '%s\n' "$statuses" | grep -Fxq 'Qualify UFS2 native freestanding Common V2 ELF:success' &&
-               printf '%s\n' "$statuses" | grep -Fxq 'UFS2 independently built shared object:success'; then
-              echo "UFS2_EXACT_HEAD_UEFI_AND_NATIVE_PASS $GITHUB_SHA"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo 'Exact-head UFS2 firmware or hosted result absent' >&2
-          exit 1
-      - name: Publish immutable UFS2 firmware-qualified DEB and native RUN
+      - name: Publish immutable UFS2 Common V2 DEB and native RUN
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -124,8 +86,8 @@ jobs:
           else
             gh release create "$tag" dist/*.deb dist/*.run \
               --target "$GITHUB_SHA" \
-              --title "UFS2 Common V2 firmware reader $version" \
-              --notes "Canonical UFS2.so hosts its freestanding ELF in the exact installed module. Full Common V2 native filesystem stat/list/read; real rebuilt BOOT validator on portable and native RUN binaries; disposable OVMF kernel/initramfs handoff; corrupted metadata rejection; byte-for-byte unchanged media. No V1 or .ko runtime fallback."
+              --title "UFS2 Common V2 filesystem $version" \
+              --notes "Canonical UFS2.so packages its source-owned Common V2 hosted and freestanding readers. Independent native stat/list/read and package qualification; BOOT and OVMF integration is not tested. No V1 or .ko runtime fallback."
           fi
           mkdir -p "$RUNNER_TEMP/release-check"
           gh release download "$tag" -p '*.deb' -p '*.run' \
