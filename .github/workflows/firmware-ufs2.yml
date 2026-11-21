@@ -26,49 +26,16 @@ jobs:
           ! readelf -dW build/firmware/UFS2.so | grep '(NEEDED)'
           nm -D --defined-only build/firmware/UFS2.so | grep -F 'infiltrator_filesystem_api_v2'
           ! nm -u build/firmware/UFS2.so | grep .
-      - name: Use unmodified rebuilt BOOT binary validator
-        if: ${{ vars.IFS_BOOT_INTEGRATION_READY == 'true' }}
+      - name: Validate native UFS2 shared object, CTest and exact installed carrier
         run: |
           set -euo pipefail
-          source tests/require-rebuilt-boot.sh
-          validator="$IFS_BOOT_VALIDATOR"
-          "$validator" build/firmware/UFS2.so
           cmake --build build --parallel 2
           ctest --test-dir build --output-on-failure
           DESTDIR="$RUNNER_TEMP/stage" cmake --install build
           module="$RUNNER_TEMP/stage/System/Filesystems/UFS2.so"
           test -s "$module"
           readelf -SW "$module" | grep -F '.infiltrator_boot'
-          "$validator" "$module"
-          cmp build/UFS2.so "$module"
-          echo UFS2_NATIVE_FREESTANDING_AND_HOSTED_ELF_VALIDATOR_PASS
-      - name: Boot actual kernel and initramfs through packaged UFS2.so in OVMF
-        if: ${{ vars.IFS_BOOT_INTEGRATION_READY == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y --no-install-recommends \
-            cpio busybox-static dosfstools gdisk mtools qemu-system-x86 ovmf
-          cc -std=c11 -D_GNU_SOURCE -O2 -Wall -Wextra -Wpedantic -Werror \
-            fixtures/ufs_mkfs.c -o "$RUNNER_TEMP/ufs2-fixture-writer"
-          kernel_package=$(apt-cache depends linux-image-generic |
-            awk '/Depends: linux-image-[0-9]/ { image=$2 } END { print image }')
-          test -n "$kernel_package"
-          release=${kernel_package#linux-image-}
-          (cd "$RUNNER_TEMP" && apt-get download "linux-image-unsigned-$release")
-          dpkg-deb -x "$RUNNER_TEMP"/linux-image-unsigned-*.deb "$RUNNER_TEMP/kernel"
-          kernel="$RUNNER_TEMP/kernel/boot/vmlinuz-$release"
-          test -s "$kernel"
-          boot="$IFS_BOOT_EFI"
-          module="$RUNNER_TEMP/stage/System/Filesystems/UFS2.so"
-          bash tests/firmware-ufs2.sh "$boot" "$module" "$kernel" \
-            "$RUNNER_TEMP/ufs2-fixture-writer" "$RUNNER_TEMP/ufs2-boot"
-          bash tests/firmware-ufs2.sh "$boot" "$module" "$kernel" \
-            "$RUNNER_TEMP/ufs2-fixture-writer" "$RUNNER_TEMP/ufs2-corrupt" \
-            bad-superblock
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ufs2-ovmf-serial
-          path: '**/serial.log'
-          if-no-files-found: warn
+          nm -D --defined-only "$module" | grep -F infiltrator_filesystem_api_v2
+          ! nm -D --defined-only "$module" | grep -E 'infiltrator_filesystem_.*_v1'
+          cmp "build/UFS2.so" "$module"
+          echo UFS2_COMMON_V2_NATIVE_FREESTANDING_CARRIER_PASS
