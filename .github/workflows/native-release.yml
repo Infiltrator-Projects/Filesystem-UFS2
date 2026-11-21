@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ufs2-boot-qualified-release
+          name: ufs2-common-v2-release
           path: dist
       - name: Publish immutable UFS2 Common V2 DEB and native RUN
         env:
