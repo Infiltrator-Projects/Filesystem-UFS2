@@ -47,12 +47,27 @@ static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
 typedef struct {
     uintptr_t active;
     IfsFsVolumeInfoV2 info;
-    const IfsFsHostRuntimeV2 *host;
+    IfsFsHostRuntimeV2 host;
     LdUfsSummary summary;
     void *map_inventory;
 } Ufs2Session;
 static Ufs2Session sessions[UFS2_MAX_SESSIONS];
 static uintptr_t session_sequence;
+
+/* Copy only fields present in the caller's V2 host prefix. A consumer may
+ * allocate its descriptor on the stack and reuse it after mount; the
+ * filesystem may retain callback context, but not descriptor storage. */
+static void retain_host(IfsFsHostRuntimeV2 *dst,
+                        const IfsFsHostRuntimeV2 *src)
+{
+    const size_t bytes = src->structure_bytes < sizeof(*dst) ?
+        src->structure_bytes : sizeof(*dst);
+    unsigned char *out = (unsigned char *)dst;
+    const unsigned char *in = (const unsigned char *)src;
+    for (size_t i = 0u; i < sizeof(*dst); ++i)
+        out[i] = i < bytes ? in[i] : 0u;
+    dst->structure_bytes = (uint32_t)bytes;
+}
 
 static Ufs2Session *find_session(void *volume)
 {
@@ -125,7 +140,7 @@ static int mount_volume(const IfsFsHostRuntimeV2 *host, void **volume,
         verified_free * summary.fragment_size != measured.free_bytes)
         return IFS_FS_CORRUPT;
     slot->info = measured;
-    slot->host = host;
+    retain_host(&slot->host, host);
     slot->summary = summary;
     slot->map_inventory = NULL;
     slot->active = ++session_sequence;
@@ -140,7 +155,7 @@ static int unmount_volume(void *volume)
     if (slot->map_inventory)
         ufs_map_host_close_v2(slot->map_inventory);
     slot->map_inventory = NULL;
-    slot->host = NULL;
+    slot->host = (IfsFsHostRuntimeV2){0};
     slot->summary = (LdUfsSummary){0};
     slot->active = 0u;
     slot->info = (IfsFsVolumeInfoV2){0};
@@ -157,10 +172,10 @@ static int query_volume(void *volume, IfsFsVolumeInfoV2 *info)
 static int ensure_inventory(Ufs2Session *slot)
 {
 #ifdef IFS_UFS_FIRMWARE_BUILD
-    ifs_ufs_firmware_bind_host(slot->host);
+    ifs_ufs_firmware_bind_host(&slot->host);
 #endif
     if (!slot->map_inventory)
-        return ufs_map_host_open_v2(slot->host, &slot->summary,
+        return ufs_map_host_open_v2(&slot->host, &slot->summary,
                                     &slot->map_inventory);
     return IFS_FS_OK;
 }
