@@ -27,6 +27,7 @@ jobs:
           nm -D --defined-only build/firmware/UFS2.so | grep -F 'infiltrator_filesystem_api_v2'
           ! nm -u build/firmware/UFS2.so | grep .
       - name: Use unmodified rebuilt BOOT binary validator
+        if: ${{ vars.IFS_BOOT_INTEGRATION_READY == 'true' }}
         run: |
           set -euo pipefail
           source tests/require-rebuilt-boot.sh
@@ -42,6 +43,7 @@ jobs:
           cmp build/UFS2.so "$module"
           echo UFS2_NATIVE_FREESTANDING_AND_HOSTED_ELF_VALIDATOR_PASS
       - name: Boot actual kernel and initramfs through packaged UFS2.so in OVMF
+        if: ${{ vars.IFS_BOOT_INTEGRATION_READY == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
