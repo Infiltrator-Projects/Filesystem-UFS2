@@ -278,6 +278,30 @@ int main(void)
         CHECK(core->read(session,"/../test",0u,data,4u)==IFS_FS_INVALID);
         CHECK(core->read(session,"/",0u,data,4u)==IFS_FS_INVALID);
     }
+    /* Keep both real Common V2 read-only mounts alive while a disposable
+     * BSD directory acquires two individually valid entries named "test".
+     * Reject the duplicate before returning a file inode or its bytes. */
+    {
+        unsigned char saved_dir[512],duplicate[512];
+        char label[64]={0},data[4]={0};
+        IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),
+                            .name=label,.name_capacity=sizeof(label)};
+        CHECK(pread(fd,saved_dir,sizeof(saved_dir),16u*1024u)
+              ==(ssize_t)sizeof(saved_dir));
+        memcpy(duplicate,saved_dir,sizeof(duplicate));
+        put16(duplicate,40u,20u,1); /* example.txt, last, becomes 20B */
+        put32(duplicate,56u,3u,1);
+        put16(duplicate,60u,456u,1); /* duplicate consumes remaining bytes */
+        duplicate[62u]=8u;duplicate[63u]=4u;
+        memcpy(duplicate+64u,"test",4u);
+        CHECK(pwrite(fd,duplicate,sizeof(duplicate),16u*1024u)
+              ==(ssize_t)sizeof(duplicate));
+        CHECK(core->stat(session,"/test",&entry)==IFS_FS_CORRUPT);
+        CHECK(core->read(parallel,"/test",0u,data,1u)==IFS_FS_CORRUPT);
+        CHECK(pwrite(fd,saved_dir,sizeof(saved_dir),16u*1024u)
+              ==(ssize_t)sizeof(saved_dir));
+        CHECK(core->stat(session,"/test",&entry)==IFS_FS_OK);
+    }
     /* Unmounting one volume must not invalidate another module session.
      * Both readers must leave every byte of the source volume untouched. */
     CHECK(core->unmount(session)==IFS_FS_OK);
