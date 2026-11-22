@@ -1533,9 +1533,10 @@ static int ufs_v2_child(const UfsInventory *inv,const UfsFileRecord *directory,
     const LdUfsSummary *s=&inv->summary;
     const bool little=ufs_little_endian(s->variant);
     uint8_t *data;
-    uint64_t previous=UINT64_MAX;
+    uint64_t previous=UINT64_MAX,matched_child=0u;
+    int have_match=0;
     int result=IFS_FS_NOT_FOUND;
-    if(!directory->directory || directory->sparse || !name_bytes ||
+    if(!child || !directory->directory || directory->sparse || !name_bytes ||
        name_bytes>255u || !s->block_size)
         return IFS_FS_UNSUPPORTED;
     data=malloc(s->block_size);
@@ -1576,17 +1577,23 @@ static int ufs_v2_child(const UfsInventory *inv,const UfsFileRecord *directory,
             }
             if(inode!=0u && length==name_bytes &&
                !memcmp(data+pos+8u,name,name_bytes)) {
-                /* The directory itself must not refer to an unallocated
-                 * inode. The follow-up inventory lookup enforces that. */
-                *child=inode;
-                result=IFS_FS_OK;
-                goto finish;
+                /* UFS dirent names must be unique within a directory.
+                 * Validate the remainder of the live directory blocks,
+                 * including other dirents and their length/geometry, before
+                 * resolving the name through the Common V2 inode inventory. */
+                if(have_match){result=IFS_FS_CORRUPT;goto finish;}
+                matched_child=inode;
+                have_match=1;
             }
             pos+=record;
         }
     }
 finish:
     free(data);
+    if(result==IFS_FS_NOT_FOUND && have_match) {
+        *child=matched_child;
+        return IFS_FS_OK;
+    }
     return result;
 }
 
