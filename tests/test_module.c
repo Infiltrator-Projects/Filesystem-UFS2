@@ -261,6 +261,19 @@ int main(void)
         CHECK(core->read(session,"/test",0u,data,32u)==IFS_FS_OK);
         CHECK(memcmp(data,"UFS2 native Common V2 inode data",32u)==0);
         CHECK(core->read(session,"/test",1024u,data,1u)==IFS_FS_INVALID);
+        /* The Common V2 allocation-map group must expose extents within
+         * the authenticated partition and terminate pagination. */
+        {
+            IfsFsExtentV2 mapped={0};
+            uint32_t written=0u;
+            CHECK(defrag->map(session,"/test",0u,&mapped,1u,&written)==IFS_FS_OK);
+            CHECK(written==1u && mapped.logical_offset==0u &&
+                  mapped.length==1024u &&
+                  mapped.physical_offset<=host.volume_bytes &&
+                  mapped.length<=host.volume_bytes-mapped.physical_offset);
+            CHECK(defrag->map(session,"/test",1u,&mapped,1u,&written)==IFS_FS_END);
+            CHECK(written==0u);
+        }
         CHECK(core->stat(session,"/missing",&entry)==IFS_FS_NOT_FOUND);
         CHECK(core->read(session,"/../test",0u,data,4u)==IFS_FS_INVALID);
         CHECK(core->read(session,"/",0u,data,4u)==IFS_FS_INVALID);
