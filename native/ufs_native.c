@@ -1810,16 +1810,22 @@ int ufs_map_host_page_v2(void *handle, const char *path,
     for(uint64_t i=first_extent;i<file->block_count && *written<capacity;++i) {
         const UfsBlockRef *ref=&inv->blocks[file->first_block+i];
         uint64_t logical,physical,length;
-        if(ref->logical_block>UINT64_MAX/s->block_size ||
-           ref->physical_fragment>UINT64_MAX/s->fragment_size)
+        /* A corrupt extent must not overflow a byte offset or length.
+         * Apply the same checks as the Common V2 file-reader path before
+         * exposing an allocation map to any consumer. */
+        if(!s->block_size || !s->fragment_size ||
+           ref->logical_block>UINT64_MAX/s->block_size ||
+           ref->physical_fragment>UINT64_MAX/s->fragment_size ||
+           ref->span_fragments>UINT64_MAX/s->fragment_size)
             return IFS_FS_CORRUPT;
         logical=ref->logical_block*s->block_size;
         physical=ref->physical_fragment*s->fragment_size;
+        const uint64_t span=(uint64_t)ref->span_fragments*s->fragment_size;
         if(logical>=file->size || physical>=inv->physical_bytes)
             return IFS_FS_CORRUPT;
         length=file->size-logical;
-        if(length>(uint64_t)ref->span_fragments*s->fragment_size)
-            length=(uint64_t)ref->span_fragments*s->fragment_size;
+        if(length>span)
+            length=span;
         if(!length || length>inv->physical_bytes-physical)
             return IFS_FS_CORRUPT;
         extents[*written]=(IfsFsExtentV2){
