@@ -41,6 +41,33 @@ jobs:
           test "$(find "$RUNNER_TEMP/root" -type f | wc -l)" = 2
           bash tests/check_v2_exports.sh "$RUNNER_TEMP/root/System/Filesystems/UFS2.so"
           test "$(find "$RUNNER_TEMP/root" -name '*.ko' | wc -l)" = 0
+      - name: Generate native UFS images from both packaged providers
+        run: |
+          set -euo pipefail
+          mkdir -p format-oracle
+          cmake -S . -B "$RUNNER_TEMP/format-check" -DBUILD_TESTING=ON
+          cmake --build "$RUNNER_TEMP/format-check" --target ufs-native-format-test --parallel 2
+          for profile in portable root; do
+            for sector in 512 4096; do
+              "$RUNNER_TEMP/format-check/ufs-native-format-test" "$RUNNER_TEMP/$profile/System/Filesystems/UFS2.so" "format-oracle/$profile-$sector.img" 3 "$sector"
+            done
+          done
+      - name: Independently qualify generated UFS images with FreeBSD fsck
+        uses: vmactions/freebsd-vm@811efaaac0668df8bfb8308c3ec997b5ab50037b
+        with:
+          release: "14"
+          copyback: false
+          run: |
+            set -eu
+            for image in format-oracle/*.img; do
+              device=$(mdconfig -a -t vnode -f "$PWD/$image" -o readonly)
+              rc=0
+              fsck_ffs -f -n "/dev/$device" > /tmp/ufs-check.log 2>&1 || rc=$?
+              cat /tmp/ufs-check.log
+              mdconfig -d -u "${device#md}"
+              test "$rc" -eq 0
+              ! grep -Ei 'INCORRECT|UNEXPECTED|BAD SUPER|SALVAGE|FIX\?|REBUILD\?|ADJUST\?|CORRECT\?|MISSING|UNALLOCATED|ALLOCATED INODE.*UNREFERENCED' /tmp/ufs-check.log
+            done
       - uses: actions/upload-artifact@v4
         with:
           name: ufs2-common-v2-release

@@ -293,10 +293,214 @@ static const IfsFsCoreOpsV2 core = {
     .directory_entry = directory_entry,
     .read = read_file
 };
+#ifndef IFS_UFS_FIRMWARE_BUILD
+/* Native little-endian UFS2 format, using the FreeBSD FFS on-disk
+ * structures documented in sys/ufs/ffs/fs.h and sys/ufs/ufs/dinode.h.
+ * Initial qualification: one cylinder group, 16 KiB blocks, 4 KiB
+ * fragments, 256 inodes, no soft updates, snapshots or metadata hashes.
+ * All disk access is through the exclusive Common V2 host lease.
+ * An independent fsck_ffs run gates release of the resulting media. */
+enum { FMT_BSIZE=16384u,FMT_FSIZE=4096u,FMT_FRAG=4u,
+       FMT_IPG=256u,FMT_INODE=256u,FMT_PRIMARY=65536u,
+       FMT_SBLK=(FMT_PRIMARY+8192u+FMT_BSIZE-1u)/FMT_BSIZE*FMT_FRAG,
+       FMT_CBLK=FMT_SBLK+FMT_FRAG,FMT_IBLK=FMT_CBLK+FMT_FRAG,
+       FMT_DBLK=FMT_IBLK+(FMT_IPG*FMT_INODE)/FMT_FSIZE,
+       FMT_IUSED=168u,FMT_FREE=FMT_IUSED+FMT_IPG/8u };
+static void fmt16(uint8_t *p,uint32_t x)
+{p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8);}
+static void fmt32(uint8_t *p,uint32_t x)
+{fmt16(p,x);fmt16(p+2,x>>16);}
+static void fmt64(uint8_t *p,uint64_t x)
+{fmt32(p,(uint32_t)x);fmt32(p+4,(uint32_t)(x>>32));}
+static int fmt_write(const IfsFsHostRuntimeV2 *h,uint64_t at,const void *p,uint32_t bytes)
+{
+    if(h->cancelled && h->cancelled(h->context))return IFS_FS_BUSY;
+    return ifs_fs_host_write_bytes_v2(h,at,p,bytes);
+}
+static int format_impl(const IfsFsHostRuntimeV2 *h,uint32_t variant,
+                       const char *label,uint32_t flags)
+{
+    if(!ifs_fs_host_v2_valid(h))return IFS_FS_INVALID;
+    if((h->capabilities&IFS_FS_HOST_READ_ONLY) ||
+       !(h->capabilities&IFS_FS_HOST_EXCLUSIVE) ||
+       !(h->capabilities&IFS_FS_HOST_DURABLE))return IFS_FS_ACCESS;
+    if(variant!=3u || flags || h->logical_sector_bytes>FMT_FSIZE ||
+       h->volume_bytes%FMT_BSIZE ||
+       h->volume_bytes<16ull*1024u*1024u ||
+       h->volume_bytes>128ull*1024u*1024u)return IFS_FS_UNSUPPORTED;
+    for(unsigned i=0;i<UFS2_MAX_SESSIONS;++i)
+        if(sessions[i].active)return IFS_FS_BUSY;
+    if(!label)label="";
+    size_t label_bytes=0u;
+    for(;label[label_bytes];++label_bytes) {
+        const unsigned char c=(unsigned char)label[label_bytes];
+        if(label_bytes>=31u || c<32u || c>126u || c=='/')return IFS_FS_INVALID;
+    }
+    const uint32_t total=(uint32_t)(h->volume_bytes/FMT_FSIZE);
+    const uint32_t cgsize=(FMT_FREE+(total+7u)/8u+FMT_FSIZE-1u)/FMT_FSIZE*FMT_FSIZE;
+    const uint32_t root=FMT_DBLK+1u; /* first fragment is cylinder summary */
+    const uint32_t first_free=root+1u;
+    const uint32_t partial=(FMT_FRAG-first_free%FMT_FRAG)%FMT_FRAG;
+    const uint32_t nbfree=(total-first_free-partial)/FMT_FRAG;
+    const uint32_t nifree=FMT_IPG-3u,dsize=total-FMT_DBLK-1u;
+    uint32_t now=0u,id2=0u;
+    if(h->realtime_ns) {
+        uint64_t seconds=h->realtime_ns(h->context)/1000000000ull;
+        if(seconds<=UINT32_MAX)now=(uint32_t)seconds;
+    }
+    if(h->structure_bytes>=sizeof(*h) && h->random_bytes) {
+        if(ifs_fs_host_random_bytes_v2(h,&id2,sizeof(id2))!=IFS_FS_OK)
+            return IFS_FS_IO_ERROR;
+    }
+    uint8_t *block=h->allocate(h->context,FMT_BSIZE);
+    uint8_t *sb=h->allocate(h->context,8192u);
+    if(!block || !sb) {
+        if(block)h->release(h->context,block);
+        if(sb)h->release(h->context,sb);
+        return IFS_FS_NO_MEMORY;
+    }
+    for(uint32_t i=0;i<FMT_BSIZE;++i)block[i]=0u;
+    for(uint32_t i=0;i<8192u;++i)sb[i]=0u;
+    int rc=IFS_FS_OK;
+    /* Revoke all standard candidate signatures and the intended backup
+     * before writing any allocation metadata. Never touch other volumes. */
+    static const uint64_t candidates[]={0u,8192u,65536u,262144u,
+                                        (uint64_t)FMT_SBLK*FMT_FSIZE};
+    for(unsigned i=0;i<sizeof(candidates)/sizeof(candidates[0]);++i) {
+        rc=fmt_write(h,candidates[i],block,8192u);
+        if(rc!=IFS_FS_OK)goto done;
+    }
+    if(h->flush(h->context)!=0){rc=IFS_FS_IO_ERROR;goto done;}
+
+    /* Cylinder group counts, inode map, and fragment allocation map.
+     * Bits are little-endian within each byte; one means free fragments,
+     * while inode-map one means allocated. Inodes zero and one reserved. */
+    fmt32(block+4,0x00090255u);
+    fmt32(block+20,total);fmt32(block+24,1u);
+    fmt32(block+28,nbfree);fmt32(block+32,nifree);
+    fmt32(block+36,partial);
+    if(partial)fmt32(block+52u+4u*partial,1u);
+    fmt32(block+116,FMT_IPG);fmt32(block+120,FMT_IPG);fmt64(block+136,now);
+    fmt32(block+92,FMT_IUSED);fmt32(block+96,FMT_FREE);
+    fmt32(block+100,FMT_FREE+(total+7u)/8u);
+    block[FMT_IUSED]=7u;
+    for(uint32_t bit=first_free;bit<total;++bit)
+        block[FMT_FREE+bit/8u]|=(uint8_t)(1u<<(bit%8u));
+    rc=fmt_write(h,(uint64_t)FMT_CBLK*FMT_FSIZE,block,FMT_BSIZE);
+    if(rc!=IFS_FS_OK)goto done;
+
+    /* Zero every inode block, then create root inode two. */
+    for(uint32_t i=0;i<FMT_IPG*FMT_INODE/FMT_BSIZE;++i) {
+        for(uint32_t j=0;j<FMT_BSIZE;++j)block[j]=0u;
+        if(!i) {
+            uint8_t *ino=block+2u*FMT_INODE;
+            fmt16(ino,0040755u);fmt16(ino+2,2u);
+            fmt32(ino+12,FMT_BSIZE);fmt64(ino+16,512u);
+            fmt64(ino+24,FMT_FSIZE/512u);
+            fmt64(ino+32,now);fmt64(ino+40,now);fmt64(ino+48,now);
+            fmt64(ino+56,now);fmt32(ino+80,id2);fmt64(ino+112,root);
+        }
+        rc=fmt_write(h,((uint64_t)FMT_IBLK+i*FMT_FRAG)*FMT_FSIZE,block,FMT_BSIZE);
+        if(rc!=IFS_FS_OK)goto done;
+    }
+    for(uint32_t i=0;i<FMT_BSIZE;++i)block[i]=0u;
+    fmt32(block,1u);fmt32(block+4,nbfree);
+    fmt32(block+8,nifree);fmt32(block+12,partial);
+    rc=fmt_write(h,(uint64_t)FMT_DBLK*FMT_FSIZE,block,FMT_FSIZE);
+    if(rc!=IFS_FS_OK)goto done;
+    for(uint32_t i=0;i<FMT_FSIZE;++i)block[i]=0u;
+    fmt32(block,2u);fmt16(block+4,12u);block[6]=4u;block[7]=1u;block[8]='.';
+    fmt32(block+12,2u);fmt16(block+16,500u);block[18]=4u;
+    block[19]=2u;block[20]='.';block[21]='.';
+    rc=fmt_write(h,(uint64_t)root*FMT_FSIZE,block,FMT_FSIZE);
+    if(rc!=IFS_FS_OK)goto done;
+    if(h->flush(h->context)!=0){rc=IFS_FS_IO_ERROR;goto done;}
+
+    /* Complete superblock geometry, masks, cylinder summary, and both
+     * modern and legacy count fields. No optional feature is asserted. */
+    fmt32(sb+8,FMT_SBLK);fmt32(sb+12,FMT_CBLK);
+    fmt32(sb+16,FMT_IBLK);fmt32(sb+20,FMT_DBLK);
+    fmt32(sb+28,UINT32_MAX);fmt32(sb+32,now);
+    fmt32(sb+36,total);fmt32(sb+40,dsize);fmt32(sb+44,1u);
+    fmt32(sb+48,FMT_BSIZE);fmt32(sb+52,FMT_FSIZE);fmt32(sb+56,FMT_FRAG);
+    fmt32(sb+60,8u);fmt32(sb+68,60u);
+    fmt32(sb+72,~(FMT_BSIZE-1u));fmt32(sb+76,~(FMT_FSIZE-1u));
+    fmt32(sb+80,14u);fmt32(sb+84,12u);fmt32(sb+88,1u);
+    fmt32(sb+92,FMT_BSIZE/4u);fmt32(sb+96,2u);
+    fmt32(sb+100,3u);fmt32(sb+104,FMT_FSIZE);
+    const uint32_t nindir=FMT_BSIZE/8u;
+    fmt32(sb+116,nindir);fmt32(sb+120,FMT_BSIZE/FMT_INODE);
+    fmt32(sb+124,FMT_FSIZE/512u);fmt32(sb+136,1u);
+    fmt32(sb+144,now);fmt32(sb+148,id2);
+    fmt32(sb+152,FMT_DBLK);fmt32(sb+156,FMT_FSIZE);fmt32(sb+160,cgsize);
+    fmt32(sb+168,total*8u);fmt32(sb+172,total*8u);
+    fmt32(sb+176,1u);fmt32(sb+180,1u);
+    fmt32(sb+184,FMT_IPG);fmt32(sb+188,total);
+    fmt32(sb+192,1u);fmt32(sb+196,nbfree);
+    fmt32(sb+200,nifree);fmt32(sb+204,partial);
+    sb[209]=1u;sb[211]=0x80u;
+    for(size_t i=0;i<label_bytes;++i)sb[680u+i]=(uint8_t)label[i];
+    fmt32(sb+860,FMT_BSIZE);fmt64(sb+872,total);
+    fmt64(sb+1000,FMT_PRIMARY);
+    fmt64(sb+1008,1u);fmt64(sb+1016,nbfree);
+    fmt64(sb+1024,nifree);fmt64(sb+1032,partial);
+    fmt64(sb+1072,now);fmt64(sb+1080,total);fmt64(sb+1088,dsize);
+    fmt64(sb+1096,FMT_DBLK);
+    fmt32(sb+1196,16384u);fmt32(sb+1200,64u);
+    fmt32(sb+1320,120u);fmt32(sb+1324,2u);
+    const uint64_t maxfilesize=(uint64_t)FMT_BSIZE*
+        (12ull+nindir+(uint64_t)nindir*nindir+(uint64_t)nindir*nindir*nindir)-1u;
+    fmt64(sb+1328,maxfilesize);fmt64(sb+1336,FMT_BSIZE-1u);
+    fmt64(sb+1344,FMT_FSIZE-1u);fmt32(sb+1352,0x7c269d38u-now);
+    fmt32(sb+1356,1u);fmt32(sb+1360,1u);fmt32(sb+1372,0x19540119u);
+    /* Commit redundant copy before the primary. The actual-copy
+     * location field identifies each superblock independently. */
+    fmt64(sb+992,(uint64_t)FMT_SBLK*FMT_FSIZE);
+    rc=fmt_write(h,(uint64_t)FMT_SBLK*FMT_FSIZE,sb,8192u);
+    if(rc!=IFS_FS_OK)goto done;
+    if(h->flush(h->context)!=0){rc=IFS_FS_IO_ERROR;goto done;}
+    fmt64(sb+992,FMT_PRIMARY);
+    rc=fmt_write(h,FMT_PRIMARY,sb,8192u);
+    if(rc!=IFS_FS_OK)goto done;
+    if(h->flush(h->context)!=0) {
+        for(uint32_t i=0;i<8192u;++i)sb[i]=0u;
+        (void)ifs_fs_host_write_bytes_v2(h,FMT_PRIMARY,sb,8192u);
+        (void)ifs_fs_host_write_bytes_v2(h,(uint64_t)FMT_SBLK*FMT_FSIZE,sb,8192u);
+        (void)h->flush(h->context);rc=IFS_FS_IO_ERROR;goto done;
+    }
+    /* Qualify our result using the production geometry and bitmap
+     * readers before allowing the caller to treat format as successful. */
+    LdUfsSummary summary;
+    rc=inspect(h,&summary);
+    if(rc==IFS_FS_OK) {
+        uint64_t free_fragments=0u;
+        rc=ufs_verify_free_bitmap_host_v2(h,&summary,&free_fragments);
+        if(rc==IFS_FS_OK && (summary.variant!=variant ||
+           free_fragments!=total-first_free))rc=IFS_FS_CORRUPT;
+    }
+done:
+    h->release(h->context,sb);h->release(h->context,block);
+    return rc;
+}
+static int format_volume(const IfsFsHostRuntimeV2 *h,uint32_t variant,
+                         const char *label,uint32_t flags)
+{
+    if(!enter_operation())return IFS_FS_BUSY;
+    return leave_operation(format_impl(h,variant,label,flags));
+}
+#endif /* hosted formatting */
+
 static const IfsFsVolumeOpsV2 volume_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsVolumeOpsV2),
-               IFS_FS_GROUP_VOLUME, 0u, IFS_FS_VOLUME_QUERY},
+               IFS_FS_GROUP_VOLUME, 0u, IFS_FS_VOLUME_QUERY
+#ifndef IFS_UFS_FIRMWARE_BUILD
+               | IFS_FS_VOLUME_FORMAT
+#endif
+    },
     .query = query_volume
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    , .format = format_volume
+#endif
 };
 static const IfsFsGroupHeaderV2 *query(uint32_t group_id,
                                        uint32_t minimum, uint32_t maximum)

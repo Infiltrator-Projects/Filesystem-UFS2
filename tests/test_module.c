@@ -166,11 +166,11 @@ int main(void)
           !defrag->verify && !defrag->recover && !defrag->release_plan);
     CHECK(core->header.capabilities==(IFS_FS_CORE_PROBE|IFS_FS_CORE_MOUNT|
            IFS_FS_CORE_STAT|IFS_FS_CORE_LIST|IFS_FS_CORE_READ));
-    CHECK(ops->header.capabilities==IFS_FS_VOLUME_QUERY);
+    CHECK(ops->header.capabilities==(IFS_FS_VOLUME_QUERY|IFS_FS_VOLUME_FORMAT));
     CHECK(core->probe && core->mount && core->unmount && ops->query);
     CHECK(core->stat && core->directory_entry && core->read &&
           !core->write && !core->create && !core->remove);
-    CHECK(!ops->format && !ops->repair && !ops->sync);
+    CHECK(ops->format && !ops->repair && !ops->sync);
     char path[]="/tmp/ufs2-v2-geometry-XXXXXX";
     int fd=mkstemp(path);
     CHECK(fd>=0);
