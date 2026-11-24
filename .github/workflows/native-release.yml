@@ -66,7 +66,7 @@ jobs:
               cat /tmp/ufs-check.log
               mdconfig -d -u "${device#md}"
               test "$rc" -eq 0
-              ! grep -Ei 'INCORRECT|UNEXPECTED|BAD SUPER|SALVAGE|FIX\?|REBUILD\?|ADJUST\?|CORRECT\?|MISSING|UNALLOCATED|ALLOCATED INODE.*UNREFERENCED' /tmp/ufs-check.log
+              if grep -Ei 'INCORRECT|UNEXPECTED|BAD SUPER|SALVAGE|FIX\?|REBUILD\?|ADJUST\?|CORRECT\?|MISSING|UNALLOCATED|ALLOCATED INODE.*UNREFERENCED' /tmp/ufs-check.log; then exit 1; fi
             done
       - uses: actions/upload-artifact@v4
         with:

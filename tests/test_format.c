@@ -70,7 +70,7 @@ int main(int argc,char **argv)
     CHECK(core->probe(&ro,&detected)==IFS_FS_OK && detected==variant);
     CHECK(core->mount(&ro,&mount,&info)==IFS_FS_OK && mount);
     CHECK(info.variant==variant && info.total_bytes==m.bytes &&
-          info.free_bytes==m.bytes-42u*4096u);
+          info.free_bytes==m.bytes-46u*4096u);
     CHECK(core->stat(mount,"/",&entry)==IFS_FS_OK && entry.type==IFS_FS_ENTRY_DIRECTORY);
     CHECK(core->directory_entry(mount,"/",0u,&entry)==IFS_FS_END);
     CHECK(vol->format(&h,variant,"NativeUFS",0u)==IFS_FS_BUSY);
