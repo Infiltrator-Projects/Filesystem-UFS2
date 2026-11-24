@@ -5,6 +5,7 @@
  */
 #include <infiltratr/filesystem_module_v2.h>
 #include <stdint.h>
+#include <stdatomic.h>
 #include "ufs_native.h"
 #ifdef IFS_UFS_FIRMWARE_BUILD
 extern void ifs_ufs_firmware_bind_host(const IfsFsHostRuntimeV2 *);
@@ -12,6 +13,21 @@ extern void ifs_ufs_firmware_bind_host(const IfsFsHostRuntimeV2 *);
 
 __attribute__((used,retain,section(".ifsmeta")))
 static const char identity[] = "IFS-MODULE:ufs2:common2";
+
+/* The lazy inventory and freestanding allocator's host binding are shared
+ * mutable state. Until they are fully per-session, a nonblocking operation
+ * gate protects all callbacks, including reentrant calls from host I/O.
+ * No spin-wait is permitted while an external callback is executing. */
+static atomic_flag operation_gate=ATOMIC_FLAG_INIT;
+static int enter_operation(void)
+{
+    return !atomic_flag_test_and_set_explicit(&operation_gate,memory_order_acquire);
+}
+static int leave_operation(int rc)
+{
+    atomic_flag_clear_explicit(&operation_gate,memory_order_release);
+    return rc;
+}
 
 static int inspect(const IfsFsHostRuntimeV2 *host, LdUfsSummary *summary)
 {
@@ -23,7 +39,7 @@ static int inspect(const IfsFsHostRuntimeV2 *host, LdUfsSummary *summary)
     return IFS_FS_OK;
 }
 
-static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
+static int probe_impl(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
 {
     LdUfsSummary summary;
     int rc;
@@ -32,6 +48,12 @@ static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
     rc = inspect(host, &summary);
     if (rc == IFS_FS_OK) *variant = (uint32_t)summary.variant;
     return rc;
+}
+static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
+{
+    if (variant) *variant=0u;
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(probe_impl(host,variant));
 }
 
 /* This is a strictly read-only geometry session, not a writable filesystem
@@ -42,8 +64,8 @@ static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
 #define UFS2_MAX_SESSIONS 32u
 /* The provider is shared across mounted volumes. A monotonically increasing
  * opaque token identifies a mount, never an address of a reusable slot.
- * Previously unmounted tokens cannot become valid again. The host must
- * serialize mount/unmount and operations on a session. */
+ * Previously unmounted tokens cannot become valid again. The provider
+ * serializes callbacks while its firmware runtime has a shared host binding. */
 typedef struct {
     uintptr_t active;
     IfsFsVolumeInfoV2 info;
@@ -113,7 +135,7 @@ static int describe(const LdUfsSummary *s, uint64_t media_bytes,
     return IFS_FS_OK;
 }
 
-static int mount_volume(const IfsFsHostRuntimeV2 *host, void **volume,
+static int mount_volume_impl(const IfsFsHostRuntimeV2 *host, void **volume,
                         IfsFsVolumeInfoV2 *info)
 {
     LdUfsSummary summary;
@@ -148,7 +170,13 @@ static int mount_volume(const IfsFsHostRuntimeV2 *host, void **volume,
     *volume = (void *)(uintptr_t)slot->active;
     return IFS_FS_OK;
 }
-static int unmount_volume(void *volume)
+static int mount_volume(const IfsFsHostRuntimeV2 *host, void **volume, IfsFsVolumeInfoV2 *info)
+{
+    if (volume) *volume=NULL;
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(mount_volume_impl(host,volume,info));
+}
+static int unmount_volume_impl(void *volume)
 {
     Ufs2Session *slot = find_session(volume);
     if (!slot) return IFS_FS_INVALID;
@@ -161,13 +189,23 @@ static int unmount_volume(void *volume)
     slot->info = (IfsFsVolumeInfoV2){0};
     return IFS_FS_OK;
 }
-static int query_volume(void *volume, IfsFsVolumeInfoV2 *info)
+static int unmount_volume(void *volume)
+{
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(unmount_volume_impl(volume));
+}
+static int query_volume_impl(void *volume, IfsFsVolumeInfoV2 *info)
 {
     Ufs2Session *slot = find_session(volume);
     if (!slot || !info || info->structure_bytes < sizeof(*info))
         return IFS_FS_INVALID;
     *info = slot->info;
     return IFS_FS_OK;
+}
+static int query_volume(void *volume, IfsFsVolumeInfoV2 *info)
+{
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(query_volume_impl(volume,info));
 }
 static int ensure_inventory(Ufs2Session *slot)
 {
@@ -179,7 +217,7 @@ static int ensure_inventory(Ufs2Session *slot)
                                     &slot->map_inventory);
     return IFS_FS_OK;
 }
-static int map_path(void *volume, const char *path, uint64_t first_extent,
+static int map_path_impl(void *volume, const char *path, uint64_t first_extent,
                     IfsFsExtentV2 *extents, uint32_t capacity, uint32_t *written)
 {
     Ufs2Session *slot = find_session(volume);
@@ -190,12 +228,18 @@ static int map_path(void *volume, const char *path, uint64_t first_extent,
         ufs_map_host_page_v2(slot->map_inventory, path, first_extent,
                              extents, capacity, written) : rc;
 }
+static int map_path(void *volume, const char *path, uint64_t first_extent, IfsFsExtentV2 *extents, uint32_t capacity, uint32_t *written)
+{
+    if (written) *written=0u;
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(map_path_impl(volume,path,first_extent,extents,capacity,written));
+}
 static const IfsFsDefragOpsV2 defrag_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsDefragOpsV2),
                IFS_FS_GROUP_DEFRAG, 0u, IFS_FS_DEFRAG_MAP},
     .map = map_path
 };
-static int stat_path(void *volume, const char *path, IfsFsEntryV2 *entry)
+static int stat_path_impl(void *volume, const char *path, IfsFsEntryV2 *entry)
 {
     Ufs2Session *slot = find_session(volume);
     if (!slot) return IFS_FS_INVALID;
@@ -203,7 +247,12 @@ static int stat_path(void *volume, const char *path, IfsFsEntryV2 *entry)
     return rc == IFS_FS_OK ?
         ufs_stat_host_v2(slot->map_inventory, path, entry) : rc;
 }
-static int directory_entry(void *volume, const char *path, uint32_t index,
+static int stat_path(void *volume, const char *path, IfsFsEntryV2 *entry)
+{
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(stat_path_impl(volume,path,entry));
+}
+static int directory_entry_impl(void *volume, const char *path, uint32_t index,
                            IfsFsEntryV2 *entry)
 {
     Ufs2Session *slot = find_session(volume);
@@ -212,7 +261,12 @@ static int directory_entry(void *volume, const char *path, uint32_t index,
     return rc == IFS_FS_OK ?
         ufs_list_host_v2(slot->map_inventory, path, index, entry) : rc;
 }
-static int read_file(void *volume, const char *path, uint64_t offset,
+static int directory_entry(void *volume, const char *path, uint32_t index, IfsFsEntryV2 *entry)
+{
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(directory_entry_impl(volume,path,index,entry));
+}
+static int read_file_impl(void *volume, const char *path, uint64_t offset,
                      void *destination, uint32_t length)
 {
     Ufs2Session *slot = find_session(volume);
@@ -221,6 +275,11 @@ static int read_file(void *volume, const char *path, uint64_t offset,
     return rc == IFS_FS_OK ?
         ufs_read_host_v2(slot->map_inventory, path, offset,
                          destination, length) : rc;
+}
+static int read_file(void *volume, const char *path, uint64_t offset, void *destination, uint32_t length)
+{
+    if (!enter_operation()) return IFS_FS_BUSY;
+    return leave_operation(read_file_impl(volume,path,offset,destination,length));
 }
 static const IfsFsCoreOpsV2 core = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsCoreOpsV2),

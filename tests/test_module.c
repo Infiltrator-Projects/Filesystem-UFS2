@@ -19,9 +19,18 @@ extern const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void);
     return 1; } } while (0)
 
 typedef struct { int fd; uint32_t sector; } Host;
+static const IfsFsCoreOpsV2 *unmount_during_read;
+static void *active_volume;
+static int observed_unmount;
 static int host_read(void *context,uint64_t offset,void *buffer,uint32_t bytes)
 {
     Host *h=context;
+    if (unmount_during_read) {
+        const IfsFsCoreOpsV2 *ops=unmount_during_read;
+        unmount_during_read=NULL;
+        observed_unmount=ops->unmount(active_volume);
+        if (observed_unmount!=IFS_FS_BUSY) return -1;
+    }
     if (offset % h->sector || bytes % h->sector) return IFS_FS_INVALID;
     return pread(h->fd,buffer,bytes,(off_t)offset)==(ssize_t)bytes ?
         IFS_FS_OK : IFS_FS_IO_ERROR;
@@ -240,7 +249,13 @@ int main(void)
         char data[32] = {0};
         host.read_at = host_read_failure;
         host.logical_sector_bytes = 4096u;
+        /* A read through the retained host callback must not permit
+         * reentrant unmount to tear down its lazy inventory. */
+        active_volume=session;
+        unmount_during_read=core;
+        observed_unmount=IFS_FS_INVALID;
         CHECK(core->read(session,"/test",0u,data,32u)==IFS_FS_OK);
+        CHECK(!unmount_during_read && observed_unmount==IFS_FS_BUSY);
         CHECK(memcmp(data,"UFS2 native Common V2 inode data",32u)==0);
         CHECK(core->read(parallel,"/test",0u,data,32u)==IFS_FS_OK);
         host = original;
