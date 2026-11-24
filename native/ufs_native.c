@@ -205,6 +205,8 @@ static void decode_ufs_allocation(const uint8_t *window, size_t length,
         return;
 
     summary->allocation_totals_known = true;
+    /* BSD fs_volname is a fixed-width superblock field. */
+    memcpy(summary->volume_label,window+base+680u,32u);
     summary->block_size = block_size;
     summary->fragment_size = fragment_size;
     summary->fragments_per_block = fragments_per_block;
@@ -779,6 +781,7 @@ typedef struct {
     uint32_t block_count;
     uint32_t cylinder_group;
     uint16_t mode;
+    uint32_t uid,gid;
     bool directory;
     bool sparse;
     bool indirect;
@@ -1363,6 +1366,10 @@ static int inventory_collect_files(UfsInventory *inventory,
                 .inode = inode_number, .inode_offset = inode_offset, .size = size,
                 .first_block = (uint32_t)inventory->block_count, .block_count = 0U,
                 .cylinder_group = UINT32_MAX, .mode = mode,
+                /* UFS2 stores full 32-bit IDs at offsets 4 and 8.
+                 * Decode with the already established disk byte order. */
+                .uid = read_u32(inode+4u,little),
+                .gid = read_u32(inode+8u,little),
                 .directory = type == UFS_IFDIR, .sparse = false,
                 .indirect = false, .fragmented = false,
             };
@@ -1650,6 +1657,19 @@ static int ufs_v2_fill_entry(IfsFsEntryV2 *entry,
     entry->size_bytes=record->size;
     entry->attributes=record->mode;
     entry->type=record->directory?IFS_FS_ENTRY_DIRECTORY:IFS_FS_ENTRY_FILE;
+    return IFS_FS_OK;
+}
+/* Resolve through the existing inode inventory and directory decoder. */
+int ufs_metadata_host_v2(void *handle,const char *path,IfsFsMetadataV2 *out)
+{
+    const UfsInventory *inv=handle;
+    const UfsFileRecord *record=NULL;
+    if(!inv || !inv->host || !out || out->structure_bytes<sizeof(*out))
+        return IFS_FS_INVALID;
+    int rc=ufs_v2_find_path(inv,path,&record);
+    if(rc!=IFS_FS_OK)return rc;
+    *out=(IfsFsMetadataV2){.structure_bytes=sizeof(*out),.mask=IFS_FS_META_GET_MODE,
+        .mode=record->mode,.owner=record->uid,.group=record->gid};
     return IFS_FS_OK;
 }
 int ufs_stat_host_v2(void *handle,const char *path,IfsFsEntryV2 *entry)

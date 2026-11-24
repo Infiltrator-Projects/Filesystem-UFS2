@@ -490,14 +490,44 @@ static int format_volume(const IfsFsHostRuntimeV2 *h,uint32_t variant,
 }
 #endif /* hosted formatting */
 
+/* Preserve the validated superblock label and native inode metadata.
+ * Neither callback advertises unsupported on-disk mutation. */
+static int volume_label(void *volume,char *out,uint32_t capacity,uint32_t *bytes)
+{
+    if(!bytes)return IFS_FS_INVALID;
+    *bytes=0u;
+    if(!out || !capacity)return IFS_FS_INVALID;
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot)return leave_operation(IFS_FS_INVALID);
+    uint32_t n=0;
+    while(n<sizeof(slot->summary.volume_label) && slot->summary.volume_label[n])++n;
+    if(n>=capacity)return leave_operation(IFS_FS_NO_SPACE);
+    for(uint32_t i=0;i<n;++i)out[i]=slot->summary.volume_label[i];
+    out[n]=0;*bytes=n;
+    return leave_operation(IFS_FS_OK);
+}
+static int metadata_get(void *volume,const char *path,IfsFsMetadataV2 *out)
+{
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot)return leave_operation(IFS_FS_INVALID);
+    int rc=ensure_inventory(slot);
+    if(rc==IFS_FS_OK)rc=ufs_metadata_host_v2(slot->map_inventory,path,out);
+    return leave_operation(rc);
+}
+static const IfsFsMetadataOpsV2 metadata_ops={
+    .header={IFS_FS_GROUP_ABI_V2,sizeof(metadata_ops),IFS_FS_GROUP_METADATA,0u,IFS_FS_META_GET_MODE},
+    .get=metadata_get
+};
 static const IfsFsVolumeOpsV2 volume_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsVolumeOpsV2),
-               IFS_FS_GROUP_VOLUME, 0u, IFS_FS_VOLUME_QUERY
+               IFS_FS_GROUP_VOLUME, 0u, IFS_FS_VOLUME_QUERY | IFS_FS_VOLUME_LABEL_GET
 #ifndef IFS_UFS_FIRMWARE_BUILD
                | IFS_FS_VOLUME_FORMAT
 #endif
     },
-    .query = query_volume
+    .query = query_volume, .label=volume_label
 #ifndef IFS_UFS_FIRMWARE_BUILD
     , .format = format_volume
 #endif
@@ -510,6 +540,7 @@ static const IfsFsGroupHeaderV2 *query(uint32_t group_id,
     if (group_id == IFS_FS_GROUP_CORE) return &core.header;
     if (group_id == IFS_FS_GROUP_VOLUME) return &volume_ops.header;
     if (group_id == IFS_FS_GROUP_DEFRAG) return &defrag_ops.header;
+    if (group_id == IFS_FS_GROUP_METADATA) return &metadata_ops.header;
     return NULL;
 }
 static const IfsFsModuleApiV2 api = {
@@ -523,7 +554,8 @@ static const IfsFsModuleApiV2 api = {
 #endif
     .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
-                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG),
+                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG) |
+                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA),
     .query_group = query
 };
 __attribute__((visibility("default")))

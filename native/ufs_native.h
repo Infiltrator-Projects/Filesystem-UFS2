@@ -45,6 +45,7 @@ typedef struct {
     uint64_t pending_blocks;
     uint32_t pending_inodes;
     uint32_t snapshot_count;
+    char volume_label[32];
 } LdUfsSummary;
 
 typedef struct {
@@ -88,6 +89,7 @@ int ufs_map_host_page_v2(void *inventory, const char *path,
                          uint64_t first_extent, IfsFsExtentV2 *,
                          uint32_t capacity, uint32_t *written);
 void ufs_map_host_close_v2(void *inventory);
+int ufs_metadata_host_v2(void *inventory,const char *path,IfsFsMetadataV2 *out);
 int ufs_stat_host_v2(void *inventory, const char *path,
                      IfsFsEntryV2 *entry);
 int ufs_list_host_v2(void *inventory, const char *path,

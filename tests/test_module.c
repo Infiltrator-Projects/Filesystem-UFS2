@@ -90,6 +90,7 @@ static int write_geometry(int fd,const unsigned char magic[4],int little,
     put64(sb,1088u,56u,little);
     put64(sb,1016u,10u,little);
     put64(sb,1032u,2u,little);
+    memcpy(sb+680u,"NativeUFS",9u);
     memcpy(sb+1372u,magic,4u);
     unsigned char cg[512]={0};
     put32(cg,4u,0x00090255u,little);
@@ -120,6 +121,7 @@ static int write_file_fixture(int fd,int little)
     put64(root,16u,512u,little);
     put64(root,112u,16u,little);
     put16(file,0u,UINT16_C(0100644),little);
+    put32(file,4u,123456u,little);put32(file,8u,654321u,little);
     put64(file,16u,1024u,little);
     put64(file,112u,18u,little);
     put32(directory,0u,2u,little);
@@ -153,7 +155,8 @@ int main(void)
     CHECK(api->runtime_profiles==IFS_FS_PROFILE_HOSTED);
     CHECK(api->group_mask==(IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
                            IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
-                           IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG)));
+                           IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG)|
+                           IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA)));
     const IfsFsCoreOpsV2 *core=(const IfsFsCoreOpsV2 *)
         ifs_fs_group_v2(api,IFS_FS_GROUP_CORE);
     const IfsFsVolumeOpsV2 *ops=(const IfsFsVolumeOpsV2 *)
@@ -166,7 +169,7 @@ int main(void)
           !defrag->verify && !defrag->recover && !defrag->release_plan);
     CHECK(core->header.capabilities==(IFS_FS_CORE_PROBE|IFS_FS_CORE_MOUNT|
            IFS_FS_CORE_STAT|IFS_FS_CORE_LIST|IFS_FS_CORE_READ));
-    CHECK(ops->header.capabilities==(IFS_FS_VOLUME_QUERY|IFS_FS_VOLUME_FORMAT));
+    CHECK(ops->header.capabilities==(IFS_FS_VOLUME_QUERY|IFS_FS_VOLUME_FORMAT|IFS_FS_VOLUME_LABEL_GET));
     CHECK(core->probe && core->mount && core->unmount && ops->query);
     CHECK(core->stat && core->directory_entry && core->read &&
           !core->write && !core->create && !core->remove);
@@ -264,6 +267,19 @@ int main(void)
         char name[256]={0},data[64]={0};
         IfsFsEntryV2 entry={.structure_bytes=sizeof(entry),.name=name,
                             .name_capacity=sizeof(name)};
+        const IfsFsMetadataOpsV2 *meta=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_METADATA);
+        IfsFsMetadataV2 metadata={.structure_bytes=sizeof(metadata)};
+        CHECK(meta && meta->get && !meta->set && meta->header.capabilities==IFS_FS_META_GET_MODE);
+        CHECK(meta->get(session,"/example.txt",&metadata)==IFS_FS_OK &&
+              metadata.mode==0100644u && metadata.owner==123456u && metadata.group==654321u);
+        CHECK(meta->get(session,"/missing",&metadata)==IFS_FS_NOT_FOUND);
+        char label[33],tiny[2]={'X','X'};
+        uint32_t bytes=UINT32_MAX;
+        CHECK(ops->label && !ops->set_label &&
+              ops->label(session,label,sizeof(label),&bytes)==IFS_FS_OK &&
+              bytes==9u && !strcmp(label,"NativeUFS"));
+        CHECK(ops->label(session,tiny,sizeof(tiny),&bytes)==IFS_FS_NO_SPACE &&
+              !bytes && tiny[0]=='X' && tiny[1]=='X');
         CHECK(core->stat(session,"/example.txt",&entry)==IFS_FS_OK);
         CHECK(entry.type==IFS_FS_ENTRY_FILE &&
               entry.size_bytes==1024u &&
