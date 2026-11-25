@@ -271,6 +271,25 @@ static int map_path(void *volume, const char *path, uint64_t first_extent, IfsFs
     if (!enter_operation()) return IFS_FS_BUSY;
     return leave_operation(map_path_impl(volume,path,first_extent,extents,capacity,written));
 }
+static int allocation_map(void *volume,uint64_t first,
+                          IfsFsAllocationRangeV2 *ranges,uint32_t capacity,
+                          uint32_t *written)
+{
+    if(!written)return IFS_FS_INVALID;
+    *written=0u;
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot)return leave_operation(IFS_FS_INVALID);
+    int rc=ensure_inventory(slot);
+    if(rc==IFS_FS_OK)
+        rc=ufs_allocation_host_page_v2(slot->map_inventory,first,ranges,capacity,written);
+    return leave_operation(rc);
+}
+static const IfsFsAllocationOpsV2 allocation_ops={
+    .header={IFS_FS_GROUP_ABI_V2,sizeof(IfsFsAllocationOpsV2),
+             IFS_FS_GROUP_ALLOCATION,0u,IFS_FS_ALLOCATION_MAP},
+    .map=allocation_map
+};
 static const IfsFsDefragOpsV2 defrag_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsDefragOpsV2),
                IFS_FS_GROUP_DEFRAG, 0u, IFS_FS_DEFRAG_MAP},
@@ -632,6 +651,7 @@ static const IfsFsGroupHeaderV2 *query(uint32_t group_id,
     if (group_id == IFS_FS_GROUP_CORE) return &core.header;
     if (group_id == IFS_FS_GROUP_VOLUME) return &volume_ops.header;
     if (group_id == IFS_FS_GROUP_DEFRAG) return &defrag_ops.header;
+    if (group_id == IFS_FS_GROUP_ALLOCATION) return &allocation_ops.header;
     if (group_id == IFS_FS_GROUP_METADATA) return &metadata_ops.header;
     return NULL;
 }
@@ -647,6 +667,7 @@ static const IfsFsModuleApiV2 api = {
     .group_mask = IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG) |
+                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_ALLOCATION) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA),
     .query_group = query
 };

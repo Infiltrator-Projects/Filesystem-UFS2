@@ -1523,6 +1523,56 @@ int ufs_map_host_open_v2(const IfsFsHostRuntimeV2 *host,
     return IFS_FS_OK;
 }
 
+/* The inventory has already read every cylinder-group free bitmap,
+ * reconciled superblock totals and checked inode data ownership. Use that
+ * snapshot directly, not an approximation derived from regular files.
+ * A bounded page can start at any partition-relative byte cursor. */
+int ufs_allocation_host_page_v2(void *handle,uint64_t first,
+                              IfsFsAllocationRangeV2 *out,uint32_t capacity,
+                              uint32_t *written)
+{
+    if(!written)return IFS_FS_INVALID;
+    *written=0u;
+    const UfsInventory *inv=handle;
+    if(!inv||!out||!capacity||capacity>64u||first>inv->physical_bytes)
+        return IFS_FS_INVALID;
+    const LdUfsSummary *s=&inv->summary;
+    if(!s->fragment_size||!inv->free_bitmap)return IFS_FS_CORRUPT;
+    /* Group zero's boot/superblock/inode prefix cannot be allocated to
+     * ordinary files. A free bit there contradicts filesystem geometry. */
+    if(s->first_data_fragment>s->filesystem_fragments)return IFS_FS_CORRUPT;
+    for(uint64_t i=0u;i<s->first_data_fragment;++i)
+        if(bit_get(inv->free_bitmap,i))return IFS_FS_CORRUPT;
+    if(first==inv->physical_bytes)return IFS_FS_END;
+    IfsFsAllocationRangeV2 page[64]={{0}};
+    uint32_t count=0u,scanned=0u;
+    uint64_t at=first;
+    while(at<inv->physical_bytes && scanned<65536u) {
+        if(inv->host->cancelled && inv->host->cancelled(inv->host->context))
+            return IFS_FS_BUSY;
+        const uint64_t fragment=at/s->fragment_size;
+        uint64_t end;
+        uint32_t state;
+        if(fragment>=s->filesystem_fragments) {
+            state=IFS_FS_SPACE_RESERVED;end=inv->physical_bytes;
+        } else {
+            state=bit_get(inv->free_bitmap,fragment)?
+                IFS_FS_SPACE_FREE:IFS_FS_SPACE_ALLOCATED;
+            end=(fragment+1u)*s->fragment_size;
+        }
+        if(count && page[count-1u].state==state)page[count-1u].length+=end-at;
+        else {
+            if(count==capacity)break;
+            page[count++]=(IfsFsAllocationRangeV2){
+                .physical_offset=at,.length=end-at,.state=state};
+        }
+        at=end;++scanned;
+    }
+    memcpy(out,page,count*sizeof(*page));
+    *written=count;
+    return IFS_FS_OK;
+}
+
 void ufs_map_host_close_v2(void *handle)
 {
     UfsInventory *inv=handle;

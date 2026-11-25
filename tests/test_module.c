@@ -158,6 +158,7 @@ int main(void)
     CHECK(api->group_mask==(IFS_FS_GROUP_BIT(IFS_FS_GROUP_CORE) |
                            IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
                            IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG)|
+                           IFS_FS_GROUP_BIT(IFS_FS_GROUP_ALLOCATION)|
                            IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA)));
     const IfsFsCoreOpsV2 *core=(const IfsFsCoreOpsV2 *)
         ifs_fs_group_v2(api,IFS_FS_GROUP_CORE);

@@ -88,6 +88,9 @@ int ufs_map_host_open_v2(const IfsFsHostRuntimeV2 *, const LdUfsSummary *,
 int ufs_map_host_page_v2(void *inventory, const char *path,
                          uint64_t first_extent, IfsFsExtentV2 *,
                          uint32_t capacity, uint32_t *written);
+int ufs_allocation_host_page_v2(void *inventory,uint64_t first_byte,
+                                IfsFsAllocationRangeV2 *,uint32_t capacity,
+                                uint32_t *written);
 void ufs_map_host_close_v2(void *inventory);
 int ufs_metadata_host_v2(void *inventory,const char *path,IfsFsMetadataV2 *out);
 int ufs_stat_host_v2(void *inventory, const char *path,
