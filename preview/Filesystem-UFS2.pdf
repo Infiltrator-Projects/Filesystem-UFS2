@@ -1,5 +1,4 @@
 %PDF-1.4
-%‚„œ”
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
 endobj
@@ -186,7 +185,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 19 0 R >>
 endobj
 19 0 obj
-<< /Length 1500 >>
+<< /Length 1484 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
 0.03 0.53 0.58 rg 50 747 120 4 re f
@@ -200,7 +199,7 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 679.0 Tm (UFS2.so must be tested ag
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 662.0 Tm (is an implementation convenience, not evidence that both disks can be parsed identically.) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 645.0 Tm (Validate superblock identity, inode format and endianness before claiming read or write) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 628.0 Tm (support.) Tj ET
-BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 599.0 Tm (Our release package, optional `.ko` and filesystem documentation are independent) Tj ET
+BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 599.0 Tm (Our release package and filesystem documentation are independent) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (deliverables. The original BSDCon paper remains the primary rationale for UFS2's on-disk) Tj ET
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (architectural changes.) Tj ET
 endstream
@@ -376,37 +375,37 @@ endobj
 xref
 0 30
 0000000000 65535 f 
-0000000015 00000 n 
-0000000064 00000 n 
-0000000198 00000 n 
-0000000268 00000 n 
-0000000343 00000 n 
-0000000411 00000 n 
-0000000557 00000 n 
-0000003354 00000 n 
-0000003500 00000 n 
-0000005476 00000 n 
-0000005624 00000 n 
-0000007608 00000 n 
-0000007756 00000 n 
-0000009648 00000 n 
-0000009796 00000 n 
-0000011740 00000 n 
-0000011888 00000 n 
-0000013584 00000 n 
-0000013732 00000 n 
-0000015284 00000 n 
-0000015432 00000 n 
-0000017956 00000 n 
-0000018104 00000 n 
-0000020832 00000 n 
-0000020980 00000 n 
-0000023656 00000 n 
-0000023804 00000 n 
-0000026318 00000 n 
-0000026466 00000 n 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000192 00000 n 
+0000000262 00000 n 
+0000000337 00000 n 
+0000000405 00000 n 
+0000000551 00000 n 
+0000003348 00000 n 
+0000003494 00000 n 
+0000005470 00000 n 
+0000005618 00000 n 
+0000007602 00000 n 
+0000007750 00000 n 
+0000009642 00000 n 
+0000009790 00000 n 
+0000011734 00000 n 
+0000011882 00000 n 
+0000013578 00000 n 
+0000013726 00000 n 
+0000015262 00000 n 
+0000015410 00000 n 
+0000017934 00000 n 
+0000018082 00000 n 
+0000020810 00000 n 
+0000020958 00000 n 
+0000023634 00000 n 
+0000023782 00000 n 
+0000026296 00000 n 
+0000026444 00000 n 
 trailer
 << /Size 30 /Root 1 0 R >>
 startxref
-30156
+30134
 %%EOF
