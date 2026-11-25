@@ -1,60 +1,36 @@
-# Filesystem-UFS2 — UFS2.so
+# Filesystem-UFS2
 
-Independent UFS2 on-disk filesystem driver for InfiltratorOS, descended from
-the original Filesystem-UFS repository. The native decoder recognises UFS2
-little- and big-endian volumes. Common V2 discovery covers both
-variants using the format-owned read-only decoder. UFS1 belongs to [Filesystem-UFS1](https://github.com/Infiltrator-Projects/Filesystem-UFS1).
+## 1. Purpose and format scope
 
-`UFS2.so` owns the UFS2 parser, analyser, staged Defrag/Growth Defrag,
-Recover, first-party UFS2 Test Media formatter, validation and raw payload
-verification. It installs to `/System/Filesystems/UFS2.so`.
+Unix File System UFS2, distinct from UFS1. This repository owns the format-specific implementation of `UFS2.so` for InfiltratorOS.
 
-`cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build && ctest --test-dir build --output-on-failure`
+## 2. On-disk architecture and invariants
 
-UFS1 and UFS2 are separately identified, built and installed. The
-package's required filesystem entry point is the Common V2 API.
-Older format-specific exports are not part of the target architecture and
-must be retired after their caller functionality has a qualified native V2
-implementation, not silently retained as the long-term interface.
+UFS2 superblock, cylinder-group geometry, wider inode block references and allocation maps are decoded in the appropriate native byte order. The inventory must distinguish actual host I/O errors from invalid structures and must not cache partial results.
 
-**Qualification:** acceptance/rejection tests exercise on-disk magic and the
-existing UFS2 Test Media suite. Independent real-media and recovery
-qualification must pass before calling either module fully complete.
+## 3. Common V2 implementation and capabilities
 
-## Installer files
+Current Common V2 source declares probe, mount, stat, read and format; older probe-only prose is historical. Historical analyser, staged relocation, recovery and test-media internals are separate from the public V2 operation masks. The canonical entry point is `infiltrator_filesystem_api_v2`. Consumers must negotiate the actual profile and operation masks and use bounded, partition-relative host I/O. A source-level callback does not by itself establish that every format variant or host profile is qualified.
 
-- `/System/Filesystems/UFS2.so`
-- `/System/Resources/Documentation/Filesystem-UFS2.pdf`
-- `/System/Kernel/Filesystems/ufs2.ko`
+## 4. Integrity, mutation, allocation and recovery
 
-The published Debian package installs these three regular files. A manual native RUN compiles the shared object and Linux adapter locally, generates the PDF, and replaces all three files. It uses the running kernel headers by default. Use `--kernel-build DIRECTORY` for a prepared kernel build with `Module.symvers`. The kernel module is stored for manual use.
+Both endian variants require independent media tests. Fault injection must precede lazy inventory caching. Do not equate source-retained defragmentation with a qualified V2 relocation interface. For destructive operations, require the applicable exclusive writable host, durability contract and format-specific validation. Never silently substitute a kernel or FUSE driver or treat a rejected or unavailable operation as success. Preserve original disk-format semantics; relocation and recovery are separate from ordinary file I/O.
 
-InfiltratorOS calls `--system-package-mode` and decides which outputs need updating. Its worker builds a missing or older SO, repairs the PDF independently, and stores the matching released kernel module when available. Use `--build-only --output DIRECTORY` to build a Debian package.
+## 5. Build, installation and release
 
-## Common V2 integration (read-only phase)
+The target installation is `/System/Filesystems/UFS2.so` and `/System/Resources/Documentation/Filesystem-UFS2.pdf`. The project release policy is a portable amd64 DEB and a CPU-native source-first RUN, with GitHub's automatic source archive; do not treat this policy statement as verification of the current installer payload. The release workflow is the authoritative executable build and package specification. Historical adapters and test artifacts are not additional production filesystem authorities.
 
-`UFS2.so` exports the native `infiltrator_filesystem_api_v2` descriptor
-with `base_v1 == NULL` and a real CORE probe over partition-relative Common
-host I/O. It does not open devices or execute any mutation while probing.
-Both UFS2 endianness variants are recognised in this Common V2 phase.
-Mount, file operations, formatting, repair, defragmentation, and kernel or EFI
-execution are **not** yet exported through the Common V2 groups. The
-format-specific legacy interfaces remain for existing qualified consumers.
+## 6. Qualification and limitations
 
-## Native build and release
+[Recorded qualification workflow](https://github.com/Infiltrator-Projects/Filesystem-UFS2/actions/runs/45526891311) · [Current workflows](https://github.com/Infiltrator-Projects/Filesystem-UFS2/actions?query=branch%3Amain). A successful workflow establishes the tested scope only, not complete original-format parity, physical-media crash safety, or production BOOT/kernel integration. Use disposable images for destructive qualification.
 
-UFS2 uses **C, C++17 and native shell** for independent package building,
-the PDF reference, two-pass PGO, kernel adapter compilation and release
-qualification. There are no Python scripts in the standalone toolchain.
+## 7. Technical references and provenance
 
-`bash standalone/release.sh release` creates exactly one portable
-Debian package and one source-embedded native installer RUN. The RUN
-verifies its payload hash before extracting and compiling locally.
-`bash standalone/release.sh install --profile aggressive --build-only --output DIRECTORY --system-package-mode`
-qualifies a hardware-specific package without modifying installed
-system files. `--kernel-build DIRECTORY` requires an externally
-prepared kernel build with `Module.symvers`.
+- [Provider implementation](module/ufs_module.c)
+- [Native design or source provenance](native/filesystems/ufs/LINUX-SOURCE-PROVENANCE.md)
+- [Migration and source history](MIGRATION_STATUS.md)
+- [Original-format reference source](docs/UFS.pages) and [PDF](docs/UFS.pdf)
+- [Project philosophy](docs/PHILOSOPHY.md)
+- [Common ABI](https://github.com/Infiltrator-Projects/Libraries)
 
-The installed module remains Common ABI V2. The older per-format
-Defragmenter entry points are not a V2 operation group and are still
-tracked for replacement rather than misrepresented as native V2.
+The original-format reference and historical migration notes describe different evidence from the current production provider. When descriptions disagree, the current exported descriptor, implementation, executable tests and exact-revision release evidence take precedence.
