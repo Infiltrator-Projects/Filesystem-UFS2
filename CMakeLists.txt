@@ -21,11 +21,12 @@ FetchContent_MakeAvailable(infiltratr_common)
 # by this standalone filesystem package.
 set_property(DIRECTORY "${infiltratr_common_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/version.h" "#define LD_VERSION \"${PROJECT_VERSION}\"\n")
-# Use only the source-owned V2 native reader and Common V2 adapter.
+# Source-owned V2 native reader and hosted mutation; no legacy worker linkage.
 # Historical worker/formatter and Linux kernel source remain uninstalled.
 add_library(ufs-driver SHARED
  native/ufs_native.c
- module/ufs_module.c)
+ module/ufs_module.c
+ module/ufs2_mutation.c)
 set_target_properties(ufs-driver PROPERTIES PREFIX "" OUTPUT_NAME "UFS2" SUFFIX ".so")
 target_compile_definitions(ufs-driver PRIVATE
  _GNU_SOURCE _FILE_OFFSET_BITS=64 IFS_UFS_MAJOR=2 IFS_UFS_V2_PRODUCTION=1)

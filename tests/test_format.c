@@ -87,8 +87,59 @@ int main(int argc,char **argv)
     CHECK(core->directory_entry(mount,"/",0u,&entry)==IFS_FS_END);
     CHECK(vol->format(&h,variant,"NativeUFS",0u)==IFS_FS_BUSY);
     CHECK(core->unmount(mount)==IFS_FS_OK);
-    CHECK(core->mount(&h,&mount,&info)==IFS_FS_ACCESS && !mount);
-    puts("UFS2 native format, allocation and empty namespace PASS");
+    /* Exercise genuine data and indirect block allocation, partial-fragment
+     * relocation, overwrite, a separate reopen, and complete native maps.
+     * The independent FreeBSD checker subsequently inspects this populated
+     * image, not an empty formatter-only fixture. */
+    CHECK(core->create && core->write);
+    CHECK(core->mount(&h,&mount,&info)==IFS_FS_OK && mount);
+    uint32_t block=info.block_bytes;
+    unsigned char data[65536],actual[65536];
+    for(uint32_t i=0;i<block;++i)data[i]=(unsigned char)(i*17u+3u);
+    CHECK(core->create(mount,"/alpha",IFS_FS_ENTRY_FILE)==IFS_FS_OK);
+    CHECK(core->create(mount,"/beta",IFS_FS_ENTRY_FILE)==IFS_FS_OK);
+    CHECK(core->create(mount,"/alpha",IFS_FS_ENTRY_FILE)==IFS_FS_EXISTS);
+    CHECK(core->create(mount,"/directory",IFS_FS_ENTRY_DIRECTORY)==IFS_FS_UNSUPPORTED);
+    CHECK(core->write(mount,"/alpha",0u,data,block)==IFS_FS_OK);
+    CHECK(core->write(mount,"/beta",0u,data,block)==IFS_FS_OK);
+    for(uint32_t i=1;i<14u;++i)
+        CHECK(core->write(mount,"/alpha",(uint64_t)i*block,data,block)==IFS_FS_OK);
+    CHECK(core->create(mount,"/tiny",IFS_FS_ENTRY_FILE)==IFS_FS_OK);
+    CHECK(core->create(mount,"/edge",IFS_FS_ENTRY_FILE)==IFS_FS_OK);
+    CHECK(core->write(mount,"/tiny",0u,data,1u)==IFS_FS_OK);
+    CHECK(core->write(mount,"/edge",0u,data,1u)==IFS_FS_OK);
+    CHECK(core->write(mount,"/tiny",1u,data+1,block/2u)==IFS_FS_OK);
+    CHECK(core->write(mount,"/alpha",1u,data+1,511u)==IFS_FS_OK);
+    CHECK(core->write(mount,"/alpha",(uint64_t)15u*block,data,1u)==IFS_FS_UNSUPPORTED);
+    CHECK(core->stat(mount,"/alpha",&entry)==IFS_FS_OK && entry.size_bytes==(uint64_t)14u*block);
+    CHECK(core->unmount(mount)==IFS_FS_OK);
+    CHECK(core->mount(&ro,&mount,&info)==IFS_FS_OK && mount);
+    CHECK(core->write(mount,"/alpha",0u,data,1u)==IFS_FS_ACCESS);
+    CHECK(core->create(mount,"/no",IFS_FS_ENTRY_FILE)==IFS_FS_ACCESS);
+    for(uint32_t i=0;i<14u;++i) {
+        CHECK(core->read(mount,"/alpha",(uint64_t)i*block,actual,block)==IFS_FS_OK);
+        CHECK(!memcmp(actual,data,block));
+    }
+    CHECK(core->read(mount,"/tiny",0u,actual,block/2u+1u)==IFS_FS_OK);
+    CHECK(!memcmp(actual,data,block/2u+1u));
+    const IfsFsDefragOpsV2 *map=(const void*)ifs_fs_group_v2(api,IFS_FS_GROUP_DEFRAG);
+    CHECK(map && map->map);
+    uint64_t first=0,logical=0,prev=0;int fragmented=0;
+    for(;;) {
+        IfsFsExtentV2 ext[16]={{0}};uint32_t count=0;
+        int rc=map->map(mount,"/alpha",first,ext,16u,&count);
+        if(rc==IFS_FS_END){CHECK(!count);break;}
+        CHECK(rc==IFS_FS_OK && count && count<=16u);
+        for(uint32_t i=0;i<count;++i) {
+            CHECK(ext[i].logical_offset==logical && ext[i].length);
+            if(logical && ext[i].physical_offset!=prev)fragmented=1;
+            logical+=ext[i].length;prev=ext[i].physical_offset+ext[i].length;
+        }
+        first+=count;CHECK(first<=14u);
+    }
+    CHECK(fragmented && logical==(uint64_t)14u*block);
+    CHECK(core->unmount(mount)==IFS_FS_OK);
+    puts("UFS2 native format, create, write, fragmentation and independent reopen PASS");
     result=0;
 done:
     close(m.fd);dlclose(lib);

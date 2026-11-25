@@ -120,7 +120,7 @@ jobs:
             gh release create "$tag" dist/*.deb dist/*.run \
               --target "$GITHUB_SHA" \
               --title "UFS2 Common V2 filesystem $version" \
-              --notes "Canonical UFS2.so packages its source-owned Common V2 hosted and freestanding readers. Native format supports the independently checked 2 GiB geometry; native stat/list/read and package qualification; BOOT and OVMF integration is not tested. No V1 or .ko runtime fallback."
+              --notes "Canonical UFS2.so packages its source-owned Common V2 hosted and freestanding readers. Native format, bounded clean flat-root create/write and exact allocation maps, with independent FreeBSD fsck on populated 2 GiB media; BOOT and OVMF integration is not tested. No V1 or .ko runtime fallback."
           fi
           mkdir -p "$RUNNER_TEMP/release-check"
           gh release download "$tag" -p '*.deb' -p '*.run' \

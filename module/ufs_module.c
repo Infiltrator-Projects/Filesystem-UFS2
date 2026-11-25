@@ -1,12 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * UFS2: strict Common V2 probe, read-only lifecycle, and volume query.
  * The independent UFS engine remains the only decoder for disk geometry.
- * No unqualified file operations, relocation, writes, or legacy ABI exports.
+ * Hosted writes use the native clean one-group profile; relocation and
+ * unqualified layouts remain unavailable. No legacy ABI exports.
  */
 #include <infiltratr/filesystem_module_v2.h>
 #include <stdint.h>
 #include <stdatomic.h>
 #include "ufs_native.h"
+#ifndef IFS_UFS_FIRMWARE_BUILD
+#include "ufs2_mutation.h"
+#endif
 #ifdef IFS_UFS_FIRMWARE_BUILD
 extern void ifs_ufs_firmware_bind_host(const IfsFsHostRuntimeV2 *);
 #endif
@@ -69,7 +73,10 @@ static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
 typedef struct {
     uintptr_t active;
     IfsFsVolumeInfoV2 info;
-    IfsFsHostRuntimeV2 host;
+    IfsFsHostRuntimeV2 host,read_host;
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    Ufs2Mutation *writer;
+#endif
     LdUfsSummary summary;
     void *map_inventory;
 } Ufs2Session;
@@ -146,8 +153,13 @@ static int mount_volume_impl(const IfsFsHostRuntimeV2 *host, void **volume,
         return IFS_FS_INVALID;
     *volume = NULL;
     if (!ifs_fs_host_v2_valid(host)) return IFS_FS_INVALID;
-    if (!(host->capabilities & IFS_FS_HOST_READ_ONLY))
-        return IFS_FS_ACCESS;
+    const int writable=!(host->capabilities & IFS_FS_HOST_READ_ONLY);
+#ifdef IFS_UFS_FIRMWARE_BUILD
+    if(writable)return IFS_FS_ACCESS;
+#else
+    for(unsigned i=0;i<UFS2_MAX_SESSIONS;++i)
+        if(sessions[i].active && (writable || sessions[i].writer))return IFS_FS_BUSY;
+#endif
     slot = unused_session();
     if (!slot || session_sequence == UINTPTR_MAX)
         return IFS_FS_BUSY;
@@ -163,6 +175,19 @@ static int mount_volume_impl(const IfsFsHostRuntimeV2 *host, void **volume,
         return IFS_FS_CORRUPT;
     slot->info = measured;
     retain_host(&slot->host, host);
+    slot->read_host=slot->host;
+    slot->read_host.capabilities &= ~(IFS_FS_HOST_EXCLUSIVE|IFS_FS_HOST_DURABLE|IFS_FS_HOST_DISCARD);
+    slot->read_host.capabilities |= IFS_FS_HOST_READ_ONLY;
+    slot->read_host.write_at=NULL;slot->read_host.flush=NULL;slot->read_host.discard=NULL;
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    if(writable) {
+        rc=ufs2_mutation_open(&slot->host,&summary,&slot->writer);
+        if(rc!=IFS_FS_OK) {
+            slot->host=(IfsFsHostRuntimeV2){0};slot->read_host=(IfsFsHostRuntimeV2){0};
+            return rc;
+        }
+    }
+#endif
     slot->summary = summary;
     slot->map_inventory = NULL;
     slot->active = ++session_sequence;
@@ -183,11 +208,17 @@ static int unmount_volume_impl(void *volume)
     if (slot->map_inventory)
         ufs_map_host_close_v2(slot->map_inventory);
     slot->map_inventory = NULL;
+    int rc=IFS_FS_OK;
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    if(ufs2_mutation_faulted(slot->writer))rc=IFS_FS_IO_ERROR;
+    ufs2_mutation_close(slot->writer);slot->writer=NULL;
+#endif
+    slot->read_host=(IfsFsHostRuntimeV2){0};
     slot->host = (IfsFsHostRuntimeV2){0};
     slot->summary = (LdUfsSummary){0};
     slot->active = 0u;
     slot->info = (IfsFsVolumeInfoV2){0};
-    return IFS_FS_OK;
+    return rc;
 }
 static int unmount_volume(void *volume)
 {
@@ -199,6 +230,9 @@ static int query_volume_impl(void *volume, IfsFsVolumeInfoV2 *info)
     Ufs2Session *slot = find_session(volume);
     if (!slot || !info || info->structure_bytes < sizeof(*info))
         return IFS_FS_INVALID;
+ #ifndef IFS_UFS_FIRMWARE_BUILD
+    if(ufs2_mutation_faulted(slot->writer))return IFS_FS_IO_ERROR;
+#endif
     *info = slot->info;
     return IFS_FS_OK;
 }
@@ -212,8 +246,11 @@ static int ensure_inventory(Ufs2Session *slot)
 #ifdef IFS_UFS_FIRMWARE_BUILD
     ifs_ufs_firmware_bind_host(&slot->host);
 #endif
+ #ifndef IFS_UFS_FIRMWARE_BUILD
+    if(ufs2_mutation_faulted(slot->writer))return IFS_FS_IO_ERROR;
+#endif
     if (!slot->map_inventory)
-        return ufs_map_host_open_v2(&slot->host, &slot->summary,
+        return ufs_map_host_open_v2(&slot->read_host, &slot->summary,
                                     &slot->map_inventory);
     return IFS_FS_OK;
 }
@@ -281,17 +318,61 @@ static int read_file(void *volume, const char *path, uint64_t offset, void *dest
     if (!enter_operation()) return IFS_FS_BUSY;
     return leave_operation(read_file_impl(volume,path,offset,destination,length));
 }
+#ifndef IFS_UFS_FIRMWARE_BUILD
+/* Drop stale read inventory before a mutation; the next stat/list/map/read
+ * independently walks the newly committed on-disk records. */
+static void mutation_refresh(Ufs2Session *slot)
+{
+    if(slot->map_inventory)ufs_map_host_close_v2(slot->map_inventory);
+    slot->map_inventory=NULL;
+}
+static void mutation_counts(Ufs2Session *slot)
+{
+    ufs2_mutation_counts(slot->writer,&slot->summary.free_blocks,&slot->summary.free_fragments);
+    slot->info.free_bytes=(slot->summary.free_blocks*slot->summary.fragments_per_block+
+        slot->summary.free_fragments)*slot->summary.fragment_size;
+}
+static int create_file(void *volume,const char *path,uint32_t type)
+{
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot)return leave_operation(IFS_FS_INVALID);
+    if(!slot->writer)return leave_operation(IFS_FS_ACCESS);
+    mutation_refresh(slot);
+    int rc=ufs2_mutation_create(slot->writer,path,type);
+    if(rc==IFS_FS_OK)mutation_counts(slot);
+    return leave_operation(rc);
+}
+static int write_file(void *volume,const char *path,uint64_t offset,const void *data,uint32_t bytes)
+{
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot)return leave_operation(IFS_FS_INVALID);
+    if(!slot->writer)return leave_operation(IFS_FS_ACCESS);
+    mutation_refresh(slot);
+    int rc=ufs2_mutation_write(slot->writer,path,offset,data,bytes);
+    if(rc==IFS_FS_OK)mutation_counts(slot);
+    return leave_operation(rc);
+}
+#endif
 static const IfsFsCoreOpsV2 core = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsCoreOpsV2),
                IFS_FS_GROUP_CORE, 0u,
                IFS_FS_CORE_PROBE | IFS_FS_CORE_MOUNT |
-               IFS_FS_CORE_STAT | IFS_FS_CORE_LIST | IFS_FS_CORE_READ},
+               IFS_FS_CORE_STAT | IFS_FS_CORE_LIST | IFS_FS_CORE_READ
+#ifndef IFS_UFS_FIRMWARE_BUILD
+               | IFS_FS_CORE_CREATE | IFS_FS_CORE_WRITE
+#endif
+    },
     .probe = probe,
     .mount = mount_volume,
     .unmount = unmount_volume,
     .stat = stat_path,
     .directory_entry = directory_entry,
     .read = read_file
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    , .create=create_file,.write=write_file
+#endif
 };
 #ifndef IFS_UFS_FIRMWARE_BUILD
 /* Native little-endian UFS2 format, using the FreeBSD FFS on-disk

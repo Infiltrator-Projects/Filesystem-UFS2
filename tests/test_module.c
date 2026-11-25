@@ -170,11 +170,11 @@ int main(void)
     CHECK(defrag->map && !defrag->plan && !defrag->execute &&
           !defrag->verify && !defrag->recover && !defrag->release_plan);
     CHECK(core->header.capabilities==(IFS_FS_CORE_PROBE|IFS_FS_CORE_MOUNT|
-           IFS_FS_CORE_STAT|IFS_FS_CORE_LIST|IFS_FS_CORE_READ));
+           IFS_FS_CORE_STAT|IFS_FS_CORE_LIST|IFS_FS_CORE_READ|IFS_FS_CORE_CREATE|IFS_FS_CORE_WRITE));
     CHECK(ops->header.capabilities==(IFS_FS_VOLUME_QUERY|IFS_FS_VOLUME_FORMAT|IFS_FS_VOLUME_LABEL_GET));
     CHECK(core->probe && core->mount && core->unmount && ops->query);
     CHECK(core->stat && core->directory_entry && core->read &&
-          !core->write && !core->create && !core->remove);
+          core->write && core->create && !core->remove);
     CHECK(ops->format && !ops->repair && !ops->sync);
     char path[]="/tmp/ufs2-v2-geometry-XXXXXX";
     int fd=mkstemp(path);
@@ -398,7 +398,7 @@ int main(void)
     invalid.write_at=host_write;
     invalid.flush=host_flush;
     CHECK(ifs_fs_host_v2_valid(&invalid));
-    CHECK(core->mount(&invalid,&session,&info)==IFS_FS_ACCESS);
+    CHECK(core->mount(&invalid,&session,&info)!=IFS_FS_OK && !session);
     CHECK(close(fd)==0);
     CHECK(unlink(path)==0);
     puts("UFS2-STRICT-COMMON-V2-READONLY-VOLUME-PASS");
