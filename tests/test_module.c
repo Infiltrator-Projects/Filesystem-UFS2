@@ -19,12 +19,14 @@ extern const IfsFsModuleApiV2 *infiltrator_filesystem_api_v2(void);
     return 1; } } while (0)
 
 typedef struct { int fd; uint32_t sector; } Host;
+static int inject_inventory_fault;
 static const IfsFsCoreOpsV2 *unmount_during_read;
 static void *active_volume;
 static int observed_unmount;
 static int host_read(void *context,uint64_t offset,void *buffer,uint32_t bytes)
 {
     Host *h=context;
+    if (inject_inventory_fault) return IFS_FS_IO_ERROR;
     if (unmount_during_read) {
         const IfsFsCoreOpsV2 *ops=unmount_during_read;
         unmount_during_read=NULL;
@@ -270,6 +272,9 @@ int main(void)
         const IfsFsMetadataOpsV2 *meta=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_METADATA);
         IfsFsMetadataV2 metadata={.structure_bytes=sizeof(metadata)};
         CHECK(meta && meta->get && !meta->set && meta->header.capabilities==IFS_FS_META_GET_MODE);
+        inject_inventory_fault=1;
+        CHECK(core->stat(session,"/example.txt",&entry)==IFS_FS_IO_ERROR);
+        inject_inventory_fault=0;
         CHECK(meta->get(session,"/example.txt",&metadata)==IFS_FS_OK &&
               metadata.mode==0100644u && metadata.owner==123456u && metadata.group==654321u);
         CHECK(meta->get(session,"/missing",&metadata)==IFS_FS_NOT_FOUND);

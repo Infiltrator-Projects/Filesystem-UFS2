@@ -800,6 +800,7 @@ typedef struct {
     int fd;
     uint64_t physical_bytes;
     LdUfsSummary summary;
+    int *initial_read_status;
     const IfsFsHostRuntimeV2 *host; /* non-owning; null for native FD writers */
 } UfsInventory;
 
@@ -1033,9 +1034,13 @@ static int inventory_read_exact_at(const UfsInventory *inventory,
                                    const char *description)
 {
     if (inventory->host) {
-        if (bytes > UINT32_MAX ||
+        int rc = bytes > UINT32_MAX ? IFS_FS_INVALID :
             ifs_fs_host_read_bytes_v2(inventory->host, offset, buffer,
-                                       (uint32_t)bytes) != IFS_FS_OK) {
+                                      (uint32_t)bytes);
+        if (rc != IFS_FS_OK) {
+            if (inventory->initial_read_status &&
+                *inventory->initial_read_status == IFS_FS_OK)
+                *inventory->initial_read_status = rc;
             ufs_error(error, error_size, description);
             return -1;
         }
@@ -1505,12 +1510,15 @@ int ufs_map_host_open_v2(const IfsFsHostRuntimeV2 *host,
     inv->host=host;
     inv->physical_bytes=host->volume_bytes;
     inv->summary=*summary;
+    int read_status=IFS_FS_OK;
+    inv->initial_read_status=&read_status;
     if (inventory_load_free_bitmap(inv,error,sizeof(error)) ||
         inventory_collect_files(inv,error,sizeof(error))) {
         inventory_free(inv);
         free(inv);
-        return IFS_FS_CORRUPT;
+        return read_status == IFS_FS_OK ? IFS_FS_CORRUPT : read_status;
     }
+    inv->initial_read_status=NULL;
     *handle=inv;
     return IFS_FS_OK;
 }
