@@ -31,7 +31,8 @@ static int entropy(void *ctx,void *p,uint32_t n)
 #define CHECK(x) do {if(!(x)){fprintf(stderr,"UFS2 format line %d: %s\n",__LINE__,#x);goto done;}}while(0)
 int main(int argc,char **argv)
 {
-    if(argc!=5)return 2;
+    if(argc!=5 && argc!=6)return 2;
+    if(argc==6 && strcmp(argv[5],"2048"))return 2;
     void *lib=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);
     if(!lib){fprintf(stderr,"%s\n",dlerror());return 2;}
     IfsFsModuleApiEntryV2 get=NULL;
@@ -43,7 +44,9 @@ int main(int argc,char **argv)
     const IfsFsCoreOpsV2 *core=(const void*)ifs_fs_group_v2(api,IFS_FS_GROUP_CORE);
     const IfsFsVolumeOpsV2 *vol=(const void*)ifs_fs_group_v2(api,IFS_FS_GROUP_VOLUME);
     if(!core || !vol || !vol->format)return 2;
-    Media m={.sector=(uint32_t)strtoul(argv[4],NULL,10),.bytes=128ull*1024u*1024u};
+    const int large=argc==6;
+    Media m={.sector=(uint32_t)strtoul(argv[4],NULL,10),
+             .bytes=(large?2048ull:128ull)*1024u*1024u};
     uint32_t variant=(uint32_t)strtoul(argv[3],NULL,10);
     m.fd=open(argv[2],O_CREAT|O_EXCL|O_NOFOLLOW|O_RDWR,0600);
     if(m.fd<0)return 2;
@@ -70,7 +73,8 @@ int main(int argc,char **argv)
     CHECK(core->probe(&ro,&detected)==IFS_FS_OK && detected==variant);
     CHECK(core->mount(&ro,&mount,&info)==IFS_FS_OK && mount);
     CHECK(info.variant==variant && info.total_bytes==m.bytes &&
-          info.free_bytes==m.bytes-46u*4096u);
+          info.block_bytes==(large?65536u:16384u) &&
+          info.free_bytes==m.bytes-(large?42ull*8192u:46ull*4096u));
     char label[33];
     uint32_t label_bytes=0;
     CHECK(vol->label && vol->label(mount,label,sizeof(label),&label_bytes)==IFS_FS_OK &&

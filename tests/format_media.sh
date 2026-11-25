@@ -5,3 +5,5 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 "$1" "$2" "$work/512.img" 3 512
 "$1" "$2" "$work/4096.img" 3 4096
+"$1" "$2" "$work/512-large.img" 3 512 2048
+"$1" "$2" "$work/4096-large.img" 3 4096 2048

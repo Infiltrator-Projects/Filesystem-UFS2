@@ -296,15 +296,13 @@ static const IfsFsCoreOpsV2 core = {
 #ifndef IFS_UFS_FIRMWARE_BUILD
 /* Native little-endian UFS2 format, using the FreeBSD FFS on-disk
  * structures documented in sys/ufs/ffs/fs.h and sys/ufs/ufs/dinode.h.
- * Initial qualification: one cylinder group, 16 KiB blocks, 4 KiB
- * fragments, 256 inodes, no soft updates, snapshots or metadata hashes.
+ * One cylinder group, 256 inodes, no soft updates, snapshots or metadata
+ * hashes. Use 16 KiB blocks/4 KiB fragments for the original small profile,
+ * and 64 KiB blocks/8 KiB fragments for media up to 2 GiB. The larger block
+ * contains the entire cylinder group's allocation bitmap without truncation.
  * All disk access is through the exclusive Common V2 host lease.
  * An independent fsck_ffs run gates release of the resulting media. */
-enum { FMT_BSIZE=16384u,FMT_FSIZE=4096u,FMT_FRAG=4u,
-       FMT_IPG=256u,FMT_INODE=256u,FMT_PRIMARY=65536u,
-       FMT_SBLK=(FMT_PRIMARY+8192u+FMT_BSIZE-1u)/FMT_BSIZE*FMT_FRAG,
-       FMT_CBLK=FMT_SBLK+FMT_FRAG,FMT_IBLK=FMT_CBLK+FMT_FRAG,
-       FMT_DBLK=FMT_IBLK+(FMT_IPG*FMT_INODE)/FMT_FSIZE,
+enum { FMT_IPG=256u,FMT_INODE=256u,FMT_PRIMARY=65536u,
        FMT_IUSED=168u,FMT_FREE=FMT_IUSED+FMT_IPG/8u };
 static void fmt16(uint8_t *p,uint32_t x)
 {p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8);}
@@ -324,10 +322,21 @@ static int format_impl(const IfsFsHostRuntimeV2 *h,uint32_t variant,
     if((h->capabilities&IFS_FS_HOST_READ_ONLY) ||
        !(h->capabilities&IFS_FS_HOST_EXCLUSIVE) ||
        !(h->capabilities&IFS_FS_HOST_DURABLE))return IFS_FS_ACCESS;
+    /* Keep the small on-disk profile byte-compatible. Larger targets need
+     * a larger cylinder-group block; increasing only the old byte limit
+     * would overrun the 16 KiB cylinder-group allocation bitmap. */
+    const int large=h->volume_bytes>128ull*1024u*1024u;
+    const uint32_t FMT_BSIZE=large?65536u:16384u;
+    const uint32_t FMT_FSIZE=large?8192u:4096u;
+    const uint32_t FMT_FRAG=FMT_BSIZE/FMT_FSIZE;
+    const uint32_t FMT_SBLK=(FMT_PRIMARY+8192u+FMT_BSIZE-1u)/FMT_BSIZE*FMT_FRAG;
+    const uint32_t FMT_CBLK=FMT_SBLK+FMT_FRAG;
+    const uint32_t FMT_IBLK=FMT_CBLK+FMT_FRAG;
+    const uint32_t FMT_DBLK=FMT_IBLK+(FMT_IPG*FMT_INODE)/FMT_FSIZE;
     if(variant!=3u || flags || h->logical_sector_bytes>FMT_FSIZE ||
        h->volume_bytes%FMT_BSIZE ||
        h->volume_bytes<16ull*1024u*1024u ||
-       h->volume_bytes>128ull*1024u*1024u)return IFS_FS_UNSUPPORTED;
+       h->volume_bytes>2ull*1024u*1024u*1024u)return IFS_FS_UNSUPPORTED;
     for(unsigned i=0;i<UFS2_MAX_SESSIONS;++i)
         if(sessions[i].active)return IFS_FS_BUSY;
     if(!label)label="";
@@ -338,6 +347,8 @@ static int format_impl(const IfsFsHostRuntimeV2 *h,uint32_t variant,
     }
     const uint32_t total=(uint32_t)(h->volume_bytes/FMT_FSIZE);
     const uint32_t cgsize=(FMT_FREE+(total+7u)/8u+FMT_FSIZE-1u)/FMT_FSIZE*FMT_FSIZE;
+    if(cgsize>FMT_BSIZE || total<=FMT_DBLK+1u+FMT_FRAG)
+        return IFS_FS_UNSUPPORTED;
     const uint32_t root=FMT_DBLK+1u; /* first fragment is cylinder summary */
     const uint32_t first_free=root+1u;
     const uint32_t partial=(FMT_FRAG-first_free%FMT_FRAG)%FMT_FRAG;
@@ -364,8 +375,8 @@ static int format_impl(const IfsFsHostRuntimeV2 *h,uint32_t variant,
     int rc=IFS_FS_OK;
     /* Revoke all standard candidate signatures and the intended backup
      * before writing any allocation metadata. Never touch other volumes. */
-    static const uint64_t candidates[]={0u,8192u,65536u,262144u,
-                                        (uint64_t)FMT_SBLK*FMT_FSIZE};
+    const uint64_t candidates[]={0u,8192u,65536u,262144u,
+                                  (uint64_t)FMT_SBLK*FMT_FSIZE};
     for(unsigned i=0;i<sizeof(candidates)/sizeof(candidates[0]);++i) {
         rc=fmt_write(h,candidates[i],block,8192u);
         if(rc!=IFS_FS_OK)goto done;
@@ -425,15 +436,15 @@ static int format_impl(const IfsFsHostRuntimeV2 *h,uint32_t variant,
     fmt32(sb+48,FMT_BSIZE);fmt32(sb+52,FMT_FSIZE);fmt32(sb+56,FMT_FRAG);
     fmt32(sb+60,8u);fmt32(sb+68,60u);
     fmt32(sb+72,~(FMT_BSIZE-1u));fmt32(sb+76,~(FMT_FSIZE-1u));
-    fmt32(sb+80,14u);fmt32(sb+84,12u);fmt32(sb+88,1u);
-    fmt32(sb+92,FMT_BSIZE/4u);fmt32(sb+96,2u);
-    fmt32(sb+100,3u);fmt32(sb+104,FMT_FSIZE);
+    fmt32(sb+80,large?16u:14u);fmt32(sb+84,large?13u:12u);fmt32(sb+88,1u);
+    fmt32(sb+92,FMT_BSIZE/4u);fmt32(sb+96,large?3u:2u);
+    fmt32(sb+100,large?4u:3u);fmt32(sb+104,FMT_FSIZE);
     const uint32_t nindir=FMT_BSIZE/8u;
     fmt32(sb+116,nindir);fmt32(sb+120,FMT_BSIZE/FMT_INODE);
     fmt32(sb+124,FMT_FSIZE/512u);fmt32(sb+136,1u);
     fmt32(sb+144,now);fmt32(sb+148,id2);
     fmt32(sb+152,FMT_DBLK);fmt32(sb+156,FMT_FSIZE);fmt32(sb+160,cgsize);
-    fmt32(sb+168,total*8u);fmt32(sb+172,total*8u);
+    fmt32(sb+168,total*(FMT_FSIZE/512u));fmt32(sb+172,total*(FMT_FSIZE/512u));
     fmt32(sb+176,1u);fmt32(sb+180,1u);
     fmt32(sb+184,FMT_IPG);fmt32(sb+188,total);
     fmt32(sb+192,1u);fmt32(sb+196,nbfree);
