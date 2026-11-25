@@ -256,6 +256,12 @@ int main(void)
         host.logical_sector_bytes = 4096u;
         /* A read through the retained host callback must not permit
          * reentrant unmount to tear down its lazy inventory. */
+        char fault_name[256]={0};
+        IfsFsEntryV2 fault_entry={.structure_bytes=sizeof(fault_entry),
+            .name=fault_name,.name_capacity=sizeof(fault_name)};
+        inject_inventory_fault=1;
+        CHECK(core->stat(session,"/example.txt",&fault_entry)==IFS_FS_IO_ERROR);
+        inject_inventory_fault=0;
         active_volume=session;
         unmount_during_read=core;
         observed_unmount=IFS_FS_INVALID;
@@ -272,9 +278,6 @@ int main(void)
         const IfsFsMetadataOpsV2 *meta=(const void *)ifs_fs_group_v2(api,IFS_FS_GROUP_METADATA);
         IfsFsMetadataV2 metadata={.structure_bytes=sizeof(metadata)};
         CHECK(meta && meta->get && !meta->set && meta->header.capabilities==IFS_FS_META_GET_MODE);
-        inject_inventory_fault=1;
-        CHECK(core->stat(session,"/example.txt",&entry)==IFS_FS_IO_ERROR);
-        inject_inventory_fault=0;
         CHECK(meta->get(session,"/example.txt",&metadata)==IFS_FS_OK &&
               metadata.mode==0100644u && metadata.owner==123456u && metadata.group==654321u);
         CHECK(meta->get(session,"/missing",&metadata)==IFS_FS_NOT_FOUND);
