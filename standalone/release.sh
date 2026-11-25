@@ -87,25 +87,11 @@ build_deb() {
   bash standalone/check-package.sh "$destination" --profile "$profile"
 }
 make_run() {
-  local destination=$1 archive="$work/source.tar.gz"
-  mkdir -p "$work/source"
-  git -C "$root" rev-parse --git-dir >/dev/null || { echo 'Release needs a Git checkout' >&2; return 1; }
-  git ls-files -z | while IFS= read -r -d '' member; do
-    case "$member" in
-      docs/UFS.pdf|standalone/kernel.sh|standalone/kernel.json|*/infiltratr/filesystem_module.h) continue;;
-      native/filesystems/*/linux/*|native/filesystems/*/efi/*|native/filesystems/*/windows/*|native/platform/linux_kernel/*) continue;;
-    esac
-    [[ -f $member && ! -L $member ]] || { echo "Invalid source archive member: $member" >&2; exit 1; }
-    mkdir -p "$work/source/$(dirname "$member")"
-    cp -- "$member" "$work/source/$member"
-  done
-  printf '%s\n' "$(revision)" > "$work/source/SOURCE-REVISION"
-  tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner \
-    -czf "$archive" -C "$work/source" .
-  local digest
-  digest=$(sha256sum "$archive" | cut -d' ' -f1)
-  sed "s/@PAYLOAD_SHA256@/$digest/g" standalone/run-header.sh > "$destination"
-  cat "$archive" >> "$destination"
+  local destination=$1 source_hash
+  source_hash=$(revision)
+  [[ $source_hash =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid source revision' >&2; return 1; }
+  # Only the pinned checkout bootstrap is published, not a source archive.
+  sed "s/@SOURCE_REVISION@/$source_hash/g" standalone/run-header.sh > "$destination"
   chmod 0755 "$destination"
 }
 release() {
