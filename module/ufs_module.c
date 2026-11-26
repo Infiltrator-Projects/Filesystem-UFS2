@@ -780,6 +780,27 @@ static const IfsFsVolumeOpsV2 volume_ops = {
     , .format = format_volume
 #endif
 };
+#ifndef IFS_UFS_FIRMWARE_BUILD
+/* Native formatter policy belongs to the provider, not its clients. */
+static int default_format_profile(IfsFsFormatProfileV2 *p)
+{
+    if(!p || p->structure_bytes<sizeof(*p))return IFS_FS_INVALID;
+    *p=(IfsFsFormatProfileV2){
+        .structure_bytes=sizeof(*p), .flags=IFS_FS_FORMAT_ACCEPTS_LABEL,
+        .format_variant=3u, .probe_variant=3u,
+        .exact_block_bytes=0u, .layout=IFS_FS_LAYOUT_MULTI_EXTENT,
+        .minimum_bytes=16ull*1024u*1024u,
+        .recommended_bytes=2048ull*1024u*1024u,
+        .maximum_bytes=2048ull*1024u*1024u
+    };
+    return IFS_FS_OK;
+}
+static const IfsFsFormatProfileOpsV2 format_profile_ops={
+    .header={IFS_FS_GROUP_ABI_V2,sizeof(IfsFsFormatProfileOpsV2),
+             IFS_FS_GROUP_FORMAT_PROFILE,0u,IFS_FS_FORMAT_PROFILE_DEFAULT},
+    .get_default=default_format_profile
+};
+#endif
 static const IfsFsGroupHeaderV2 *query(uint32_t group_id,
                                        uint32_t minimum, uint32_t maximum)
 {
@@ -787,6 +808,9 @@ static const IfsFsGroupHeaderV2 *query(uint32_t group_id,
         maximum < IFS_FS_GROUP_ABI_V2) return NULL;
     if (group_id == IFS_FS_GROUP_CORE) return &core.header;
     if (group_id == IFS_FS_GROUP_VOLUME) return &volume_ops.header;
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    if (group_id == IFS_FS_GROUP_FORMAT_PROFILE) return &format_profile_ops.header;
+#endif
     if (group_id == IFS_FS_GROUP_DEFRAG) return &defrag_ops.header;
     if (group_id == IFS_FS_GROUP_ALLOCATION) return &allocation_ops.header;
     if (group_id == IFS_FS_GROUP_METADATA) return &metadata_ops.header;
@@ -805,7 +829,11 @@ static const IfsFsModuleApiV2 api = {
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_VOLUME) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_DEFRAG) |
                   IFS_FS_GROUP_BIT(IFS_FS_GROUP_ALLOCATION) |
-                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA),
+                  IFS_FS_GROUP_BIT(IFS_FS_GROUP_METADATA)
+#ifndef IFS_UFS_FIRMWARE_BUILD
+                  | IFS_FS_GROUP_BIT(IFS_FS_GROUP_FORMAT_PROFILE)
+#endif
+                  ,
     .query_group = query
 };
 __attribute__((visibility("default")))
