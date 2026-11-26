@@ -3,7 +3,7 @@
 << /Type /Catalog /Pages 2 0 R >>
 endobj
 2 0 obj
-<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R 26 0 R 28 0 R] /Count 12 >>
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R 26 0 R 28 0 R 30 0 R 32 0 R 34 0 R 36 0 R 38 0 R 40 0 R 42 0 R 44 0 R 46 0 R 48 0 R 50 0 R 52 0 R 54 0 R 56 0 R 58 0 R 60 0 R 62 0 R] /Count 29 >>
 endobj
 3 0 obj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
@@ -18,6 +18,411 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 7 0 R >>
 endobj
 7 0 obj
+<< /Length 939 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Origins and scope) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(UFS2 is the later FreeBSD evolution of FFS, introduced with FreeBSD 5. It) Tj
+T* (enlarges fragment pointers to 64 bits, expands inodes to 256 bytes and) Tj
+T* (provides larger capacity and richer metadata. Magic 0x19540119 identifies) Tj
+T* (the ordinary UFS2 format. Retain the distinction between logical block size,) Tj
+T* (fragment size and device sector size. Compatibility features such as soft) Tj
+T* (updates journaling, metadata check-hashes and snapshots need separate) Tj
+T* (qualification.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 1 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 1027 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Geometry and address units) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(The Berkeley Fast File System divides a volume into cylinder groups. A) Tj
+T* (filesystem block B contains F=B/f fragments of size f. F is normally 1, 2, 4) Tj
+T* (or 8. Stored block addresses refer to fragments, not necessarily whole) Tj
+T* (filesystem blocks or disk sectors. Physical byte offset equals partition) Tj
+T* (start plus fragment number times f. Validate B and f as powers of two, their) Tj
+T* (ratio, all group bounds, and all products before trusting metadata. Cylinder) Tj
+T* (geometry is historical placement information, not the geometry of a modern) Tj
+T* (SSD.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 2 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 1096 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Superblock discovery and fields) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(Read candidate superblocks of 8192 bytes at the profile-appropriate offsets,) Tj
+T* (typically 8192 for UFS1 or 65536 for UFS2; alternative locations 0 and) Tj
+T* (262144 require profile checks. Detect byte order from the magic at byte) Tj
+T* (1372. Common 32-bit fields, offsets from superblock: sblkno 8, cblkno 12,) Tj
+T* (iblkno 16, dblkno 20, old cgoffset 24, old cgmask 28, ncg 44, bsize 48,) Tj
+T* (fsize 52, frag 56, minfree 60, bshift 80, fshift 84, fragshift 96, fsbtodb) Tj
+T* (100, sbsize 104, nindir 116, inopb 120, cssize 156, cgsize 160, ipg 184, fpg) Tj
+T* (188. Do not interpret saved in-memory pointer fields as disk addresses.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 3 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 1086 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Extended superblock fields) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(The UFS2 64-bit size fields replace the old 32-bit size counters. In the BSD) Tj
+T* (layout, standard superblock location is at 1000, total summary starts at) Tj
+T* (1008, time at 1072, size at 1080, data size at 1088, summary-area fragment) Tj
+T* (address at 1096 and pending blocks at 1104. Read the actual 64-bit fields,) Tj
+T* (not truncated legacy fields. Compare the standard superblock location with) Tj
+T* (discovery location according to the profile. Modern FreeBSD has additional) Tj
+T* (feature and checksum fields in formerly reserved regions; consult the pinned) Tj
+T* (fs.h rather than requiring all reserved bytes to be zero.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 4 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 15 0 R >>
+endobj
+15 0 obj
+<< /Length 1000 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Cylinder group placement) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(For group g, cgbase=g*fpg. UFS1 cgstart=cgbase+cgoffset*\(g &) Tj
+T* (complement\(cgmask\)\); UFS2 cgstart=cgbase. The backup superblock, group) Tj
+T* (header, inode table and initial data area occur at cgstart+sblkno, +cblkno,) Tj
+T* (+iblkno and +dblkno respectively. These are fragment addresses. Check group) Tj
+T* (index and last-group size. UFS1 uses rotational staggering to distribute) Tj
+T* (metadata; the UFS2 geometry simplifies placement. The group header and) Tj
+T* (allocation maps may not occupy identical offsets across historical variants.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 5 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 17 0 R >>
+endobj
+17 0 obj
+<< /Length 1045 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Cylinder group header) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(In the modern BSD cylinder group layout, 32-bit fields include magic at 4) Tj
+T* (\(0x00090255\), group number 12, data fragment count 20, directory count 24,) Tj
+T* (free whole blocks 28, free inodes 32, free fragments 36,) Tj
+T* (block/fragment/inode rotors 40/44/48. Fragment summary begins at 52. Map) Tj
+T* (offsets are stored at 92 \(inode used\), 96 \(fragment free\), 100 \(next free) Tj
+T* (offset\), 104 \(cluster summary\), 108 \(cluster bitmap\). Validate the entire) Tj
+T* (map extent against cgsize and actual group capacity. Treat older cylinder) Tj
+T* (group layouts as separate profiles.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 6 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 19 0 R >>
+endobj
+19 0 obj
+<< /Length 1106 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Bitmap accounting) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(The fragment map uses set bits for free space; the inode map uses set bits) Tj
+T* (for allocated inodes. Within each byte the bit index is least significant) Tj
+T* (first in the BSD bitmap representation. A whole free block consists of F) Tj
+T* (aligned free fragments; it must not also be counted as F free partial) Tj
+T* (fragments in summary statistics. The free-fragment run histogram and) Tj
+T* (optional contiguous-cluster summary accelerate allocation. Recompute) Tj
+T* (counters from the maps; reserve superblocks, summary areas, group metadata,) Tj
+T* (inode tables and any other allocated metadata. Never use the free count) Tj
+T* (alone to authorize a write.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 7 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 21 0 R >>
+endobj
+21 0 obj
+<< /Length 933 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Inode lookup) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(For inode n, g=floor\(n/ipg\), local=n mod ipg; inode block) Tj
+T* (index=floor\(local/inopb\), slot=local mod inopb. The inode lies at) Tj
+T* (\(cgstart+iblkno+inode_block_index*F\)*f+slot*inode_size relative to the) Tj
+T* (partition. Inode 2 is the root. Inode 0 is not a regular directory target.) Tj
+T* (Check group allocation, inode-table bounds, and inode type. A stale) Tj
+T* (directory record can identify a reused inode, so directory and allocation) Tj
+T* (consistency are independent checks.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 8 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+22 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 23 0 R >>
+endobj
+23 0 obj
+<< /Length 1137 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (UFS2 dinode byte layout) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(The 256-byte inode: mode 0 \(16\), links 2 \(16\), uid 4, gid 8, preferred block) Tj
+T* (size 12, logical size 16 \(64\), allocated sectors 24 \(64\), atime 32, mtime) Tj
+T* (40, ctime 48, birthtime 56 \(64-bit seconds each\),) Tj
+T* (mtime/atime/ctime/birthtime nanoseconds 64/68/72/76, generation 80, kernel) Tj
+T* (flags 84, flags 88, external attribute size 92. Two 64-bit extended) Tj
+T* (attribute pointers begin at 96; twelve direct pointers begin at 112, three) Tj
+T* (indirect at 208. Modern modrev 232, freelink or dirdepth 240, checksum 244) Tj
+T* (and spare tail 248. Inline symlink data may use the 120-byte pointer union.) Tj
+T* (Respect feature and type-specific interpretations.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 9 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+24 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 25 0 R >>
+endobj
+25 0 obj
+<< /Length 1086 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Direct and indirect data) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(Twelve direct addresses precede single, double and triple indirect pointers.) Tj
+T* (With N=B/pointer_size, logical blocks 0..11 use direct pointers, the next N) Tj
+T* (use single indirection, the next N squared double, the next N cubed triple.) Tj
+T* (Subtract the preceding ranges and select indices by quotient and remainder.) Tj
+T* (Each pointer represents a fragment address. Indirect blocks are full blocks) Tj
+T* (and require full aligned allocation. Zero pointers represent holes; do not) Tj
+T* (read physical sector zero as file data. Limit reads to the inode's logical) Tj
+T* (size, and reject overflowing or cyclic indirect paths.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 10 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+26 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 27 0 R >>
+endobj
+27 0 obj
+<< /Length 1067 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Fragments and sparse tails) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(With B=8192 and f=1024, a 2500-byte file uses three fragments in its first) Tj
+T* (direct block, not eight. A 10500-byte file uses one full 8192-byte block and) Tj
+T* (three fragments for its 2308-byte direct tail. Under the BSD blksize rule,) Tj
+T* (blocks addressed indirectly use full block allocation, even when the final) Tj
+T* (logical data is shorter. As a direct tail grows, the allocator may extend) Tj
+T* (its fragment run or move the tail to a larger free run. Preserve the file's) Tj
+T* (data, zero newly visible bytes, and publish allocation and pointer changes) Tj
+T* (in the appropriate consistency order.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 11 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+28 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 29 0 R >>
+endobj
+29 0 obj
+<< /Length 912 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Worked UFS2 inode and indirection) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(Example B=8192, f=1024, ipg=2048, fpg=32768 and iblkno=32. Inode 2050 is) Tj
+T* (group 1, local slot 2. Its inode table starts at fragment 32800. The byte) Tj
+T* (address is 33587712. With 8-byte pointers N=1024; logical block 1036 is the) Tj
+T* (first doubly indirect data block. Both double-indirect indices are zero.) Tj
+T* (Inodes per block=32. For lazy inode initialization validate the initialized) Tj
+T* (inode boundary before reading an inode record.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 12 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+30 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 31 0 R >>
+endobj
+31 0 obj
+<< /Length 1153 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Directory records and names) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(A directory is a file of variable-size records constrained to 512-byte) Tj
+T* (directory blocks. Modern record fields: inode 0 \(32 bits\), record length 4) Tj
+T* (\(16 bits\), type 6 \(8 bits\), name length 7 \(8 bits\), name at 8. Legacy) Tj
+T* (formats use a 16-bit name length at offset 6; the byte order and inode) Tj
+T* (format determine interpretation. Minimum record length is) Tj
+T* (align4\(8+namelen+1\). Validate nonzero aligned lengths, boundary containment,) Tj
+T* (terminator and inode range. Inode zero marks an unused record. Insertion) Tj
+T* (splits excess record space; deletion can merge space within the directory) Tj
+T* (block. Verify dot and dot-dot and hard-link counts separately.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 13 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+32 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 33 0 R >>
+endobj
+33 0 obj
+<< /Length 1144 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Allocation and namespace changes) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(A new inode requires a free inode bit, initialized metadata, then a valid) Tj
+T* (directory reference. Allocation seeks locality by group, chooses aligned) Tj
+T* (free whole blocks or an appropriate fragment run, updates the maps and) Tj
+T* (summary, and initializes data before publishing pointers. On unlink, remove) Tj
+T* (the name and decrement links; reclaim only when the last link and open-file) Tj
+T* (lifetime permit. Renaming directories requires cycle prevention, parent-link) Tj
+T* (correction and ordered directory updates. Account for indirect blocks and) Tj
+T* (extended attributes as well as user data. Reserve policy \(minfree\) is) Tj
+T* (separate from physical free space.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 14 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+34 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 35 0 R >>
+endobj
+35 0 obj
+<< /Length 1233 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Consistency and qualification) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(Classical FFS does not have an unconditional on-disk redo journal. Soft) Tj
+T* (updates impose metadata dependencies; soft-updates journaling adds a) Tj
+T* (particular recovery protocol. Other BSD/Solaris journal schemes are not) Tj
+T* (interchangeable. A checker must reconcile inode allocation, block ownership,) Tj
+T* (fragment boundaries, link counts, directory reachability, group summaries) Tj
+T* (and superblock totals. Do not mistake a clean flag for proof of consistency.) Tj
+T* (An independent writer needs a validated profile for the enabled features,) Tj
+T* (including snapshots, checksums and journal behavior. Test on disposable) Tj
+T* (images from native newfs and verify with native fsck; include interrupted) Tj
+T* (allocations and renames, not only clean read-back.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 15 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+36 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 37 0 R >>
+endobj
+37 0 obj
+<< /Length 1132 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Sources and independent implementation) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(Primary design: McKusick, Joy, Leffler and Fabry, A Fast File System for) Tj
+T* (UNIX \(1984\). Layout reference: FreeBSD release/14.2.0, sys/ufs/ffs/fs.h,) Tj
+T* (sys/ufs/ufs/dinode.h and sys/ufs/ufs/dir.h:) Tj
+T* (https://github.com/freebsd/freebsd-src/tree/release/14.2.0/sys/ufs .) Tj
+T* (Independent cross-check: Linux v6.12 fs/ufs/ufs_fs.h and fs/ufs/balloc.c:) Tj
+T* (https://github.com/torvalds/linux/tree/v6.12/fs/ufs . The original) Tj
+T* (historical manual follows. Project provider claims in that appendix are) Tj
+T* (historical, not current qualification. Exact journal replay and all vendor) Tj
+T* (variants require additional source and fixture verification.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 16 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+38 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 39 0 R >>
+endobj
+39 0 obj
+<< /Length 638 >>
+stream
+0.05 0.13 0.22 rg 0 749 595 93 re f
+0.01 0.52 0.56 rg 50 747 116 5 re f
+1 1 1 rg BT /F2 11 Tf 50 807 Td (INFILTRATOR / FILESYSTEM ENGINEERING REFERENCE) Tj ET
+BT /F2 21 Tf 50 775 Td (UFS2 - technical reference) Tj ET
+0.05 0.13 0.22 rg BT /F2 14 Tf 50 715 Td (Historical reference appendix) Tj ET
+BT /F1 11 Tf 15 TL 50 685 Td
+(The earlier manual follows for provenance. Its provider and qualification) Tj
+T* (statements are historical; the new engineering chapters take precedence for) Tj
+T* (format interpretation.) Tj
+ET
+0.05 0.13 0.22 rg BT /F1 9 Tf 50 42 Td (Engineering chapter 17 | Original format, not provider qualification) Tj ET
+endstream
+endobj
+40 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 41 0 R >>
+endobj
+41 0 obj
 << /Length 2746 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -55,10 +460,10 @@ BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 221.0 Tm (5. Design rationale and li
 BT /F1 10.6 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 198.0 Tm (6. InfiltratorOS integration boundary) Tj ET
 endstream
 endobj
-8 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 9 0 R >>
+42 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 43 0 R >>
 endobj
-9 0 obj
+43 0 obj
 << /Length 1925 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -81,10 +486,10 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (filesystem. UFS1 remained
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 514.0 Tm (separately.) Tj ET
 endstream
 endobj
-10 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 11 0 R >>
+44 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 45 0 R >>
 endobj
-11 0 obj
+45 0 obj
 << /Length 1932 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -107,10 +512,10 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (implications for consiste
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 514.0 Tm (design goals.) Tj ET
 endstream
 endobj
-12 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 13 0 R >>
+46 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 47 0 R >>
 endobj
-13 0 obj
+47 0 obj
 << /Length 1840 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -132,10 +537,10 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (structures support extend
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (with format-specific bounds and revision awareness.) Tj ET
 endstream
 endobj
-14 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 15 0 R >>
+48 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 49 0 R >>
 endobj
-15 0 obj
+49 0 obj
 << /Length 1892 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -157,10 +562,10 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (is damaged. A modern repa
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 531.0 Tm (directory connectivity instead of treating a consistent superblock as a complete audit.) Tj ET
 endstream
 endobj
-16 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 17 0 R >>
+50 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 51 0 R >>
 endobj
-17 0 obj
+51 0 obj
 << /Length 1644 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -181,10 +586,10 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (durability and repair beh
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 548.0 Tm (options.) Tj ET
 endstream
 endobj
-18 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 19 0 R >>
+52 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 53 0 R >>
 endobj
-19 0 obj
+53 0 obj
 << /Length 1484 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -204,10 +609,10 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 582.0 Tm (deliverables. The origina
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 565.0 Tm (architectural changes.) Tj ET
 endstream
 endobj
-20 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 21 0 R >>
+54 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 55 0 R >>
 endobj
-21 0 obj
+55 0 obj
 << /Length 2472 >>
 stream
 0.06 0.13 0.22 rg 0 750 595 92 re f
@@ -234,10 +639,10 @@ BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 391.0 Tm (release-specific tests ar
 BT /F1 10.15 Tf 0.08 0.15 0.24 rg 1 0 0 1 50 374.0 Tm (package installation does not qualify physical writes, recovery, kernel mounting or boot.) Tj ET
 endstream
 endobj
-22 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 23 0 R >>
+56 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 57 0 R >>
 endobj
-23 0 obj
+57 0 obj
 << /Length 2676 >>
 stream
 0.05 0.13 0.22 rg 0 749 595 93 re f
@@ -266,10 +671,10 @@ BT /F1 10 Tf 0.09 0.16 0.24 rg 1 0 0 1 55 377 Tm (8. Distinguish format design c
 BT /F1 10 Tf 0.09 0.16 0.24 rg 1 0 0 1 55 360.5 Tm (techniques that can operate around the same underlying media layout.) Tj ET
 endstream
 endobj
-24 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 25 0 R >>
+58 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 59 0 R >>
 endobj
-25 0 obj
+59 0 obj
 << /Length 2624 >>
 stream
 0.05 0.13 0.22 rg 0 749 595 93 re f
@@ -298,10 +703,10 @@ BT /F1 10 Tf 0.09 0.16 0.24 rg 1 0 0 1 55 377 Tm (8. Reference the original BSD 
 BT /F1 10 Tf 0.09 0.16 0.24 rg 1 0 0 1 55 360.5 Tm (limits and design rationale rather than extrapolating from modern kernel flags.) Tj ET
 endstream
 endobj
-26 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 27 0 R >>
+60 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 61 0 R >>
 endobj
-27 0 obj
+61 0 obj
 << /Length 2462 >>
 stream
 0.05 0.13 0.22 rg 0 749 595 93 re f
@@ -330,10 +735,10 @@ BT /F1 10.2 Tf 0.07 0.16 0.23 rg 1 0 0 1 50 428 Tm (source-level callback does n
 BT /F1 10.2 Tf 0.07 0.16 0.23 rg 1 0 0 1 50 413 Tm (variant or host profile is qualified.) Tj ET
 endstream
 endobj
-28 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 29 0 R >>
+62 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 63 0 R >>
 endobj
-29 0 obj
+63 0 obj
 << /Length 3638 >>
 stream
 0.05 0.13 0.22 rg 0 749 595 93 re f
@@ -373,39 +778,73 @@ BT /F1 10.2 Tf 0.07 0.16 0.23 rg 1 0 0 1 50 263 Tm (qualification.) Tj ET
 endstream
 endobj
 xref
-0 30
+0 64
 0000000000 65535 f 
 0000000009 00000 n 
 0000000058 00000 n 
-0000000192 00000 n 
-0000000262 00000 n 
-0000000337 00000 n 
-0000000405 00000 n 
-0000000551 00000 n 
-0000003348 00000 n 
-0000003494 00000 n 
-0000005470 00000 n 
-0000005618 00000 n 
-0000007602 00000 n 
-0000007750 00000 n 
-0000009642 00000 n 
-0000009790 00000 n 
-0000011734 00000 n 
-0000011882 00000 n 
-0000013578 00000 n 
-0000013726 00000 n 
-0000015262 00000 n 
-0000015410 00000 n 
-0000017934 00000 n 
-0000018082 00000 n 
-0000020810 00000 n 
-0000020958 00000 n 
-0000023634 00000 n 
-0000023782 00000 n 
-0000026296 00000 n 
-0000026444 00000 n 
+0000000311 00000 n 
+0000000381 00000 n 
+0000000456 00000 n 
+0000000524 00000 n 
+0000000670 00000 n 
+0000001659 00000 n 
+0000001805 00000 n 
+0000002883 00000 n 
+0000003031 00000 n 
+0000004179 00000 n 
+0000004327 00000 n 
+0000005465 00000 n 
+0000005613 00000 n 
+0000006665 00000 n 
+0000006813 00000 n 
+0000007910 00000 n 
+0000008058 00000 n 
+0000009216 00000 n 
+0000009364 00000 n 
+0000010348 00000 n 
+0000010496 00000 n 
+0000011685 00000 n 
+0000011833 00000 n 
+0000012971 00000 n 
+0000013119 00000 n 
+0000014238 00000 n 
+0000014386 00000 n 
+0000015349 00000 n 
+0000015497 00000 n 
+0000016702 00000 n 
+0000016850 00000 n 
+0000018046 00000 n 
+0000018194 00000 n 
+0000019479 00000 n 
+0000019627 00000 n 
+0000020811 00000 n 
+0000020959 00000 n 
+0000021648 00000 n 
+0000021796 00000 n 
+0000024594 00000 n 
+0000024742 00000 n 
+0000026719 00000 n 
+0000026867 00000 n 
+0000028851 00000 n 
+0000028999 00000 n 
+0000030891 00000 n 
+0000031039 00000 n 
+0000032983 00000 n 
+0000033131 00000 n 
+0000034827 00000 n 
+0000034975 00000 n 
+0000036511 00000 n 
+0000036659 00000 n 
+0000039183 00000 n 
+0000039331 00000 n 
+0000042059 00000 n 
+0000042207 00000 n 
+0000044883 00000 n 
+0000045031 00000 n 
+0000047545 00000 n 
+0000047693 00000 n 
 trailer
-<< /Size 30 /Root 1 0 R >>
+<< /Size 64 /Root 1 0 R >>
 startxref
-30134
+51383
 %%EOF
