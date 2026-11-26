@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later
  * UFS2: strict Common V2 probe, read-only lifecycle, and volume query.
  * The independent UFS engine remains the only decoder for disk geometry.
- * Hosted writes use the native clean one-group profile; relocation and
- * unqualified layouts remain unavailable. No legacy ABI exports.
+ * Hosted writes and native copy-before-switch relocation use the bounded
+ * clean one-group profile. Unqualified layouts remain unavailable.
  */
 #include <infiltratr/filesystem_module_v2.h>
 #include <stdint.h>
@@ -43,12 +43,31 @@ static int inspect(const IfsFsHostRuntimeV2 *host, LdUfsSummary *summary)
     return IFS_FS_OK;
 }
 
+static int pending_marker(const IfsFsHostRuntimeV2 *host)
+{
+    static const unsigned char magic[8]={'I','F','S','2','R','E','D','O'};
+    unsigned char actual[8];
+    if(!ifs_fs_host_v2_valid(host))return IFS_FS_INVALID;
+    if(host->volume_bytes<8192u)return IFS_FS_NOT_FOUND;
+    int rc=ifs_fs_host_read_bytes_v2(host,0u,actual,sizeof(actual));
+    if(rc!=IFS_FS_OK)return rc;
+    for(unsigned i=0;i<4u;++i)if(actual[i]!=magic[i])return IFS_FS_NOT_FOUND;
+    for(unsigned i=4u;i<8u;++i)if(actual[i]!=magic[i])return IFS_FS_CORRUPT;
+#ifdef IFS_UFS_FIRMWARE_BUILD
+    return IFS_FS_BUSY;
+#else
+    return ufs2_relocation_marker(host);
+#endif
+}
 static int probe_impl(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
 {
     LdUfsSummary summary;
     int rc;
     if (!variant) return IFS_FS_INVALID;
     *variant = 0u;
+    rc=pending_marker(host);
+    if(rc==IFS_FS_OK){*variant=LD_UFS_VARIANT_UFS2_LE;return IFS_FS_OK;}
+    if(rc!=IFS_FS_NOT_FOUND)return rc;
     rc = inspect(host, &summary);
     if (rc == IFS_FS_OK) *variant = (uint32_t)summary.variant;
     return rc;
@@ -60,8 +79,7 @@ static int probe(const IfsFsHostRuntimeV2 *host, uint32_t *variant)
     return leave_operation(probe_impl(host,variant));
 }
 
-/* This is a strictly read-only geometry session, not a writable filesystem
- * mount. The superblock must have validated allocation/cylinder geometry;
+/* The session uses validated geometry and a separately bounded hosted writer. The superblock must have validated allocation/cylinder geometry;
  * recognising a four-byte UFS magic alone is NOT enough for volume query.
  * Generation tokens reject stale callers without dereferencing freed memory.
  */
@@ -78,6 +96,7 @@ typedef struct {
     Ufs2Mutation *writer;
     Ufs2RelocationPlan *plan;
     uintptr_t plan_token;
+    int recovery_pending;
 #endif
     LdUfsSummary summary;
     void *map_inventory;
@@ -168,6 +187,21 @@ static int mount_volume_impl(const IfsFsHostRuntimeV2 *host, void **volume,
     slot = unused_session();
     if (!slot || session_sequence == UINTPTR_MAX)
         return IFS_FS_BUSY;
+    rc=pending_marker(host);
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    if(rc==IFS_FS_OK) {
+        if(!writable)return IFS_FS_BUSY;
+        uint64_t repaired=0u;
+        rc=ufs2_relocation_recover(host,0,&repaired,&measured);
+        if(rc!=IFS_FS_OK)return rc;
+        retain_host(&slot->host,host);
+        slot->info=measured;slot->recovery_pending=1;
+        slot->active=++session_sequence;
+        *volume=(void*)slot->active;*info=measured;
+        return IFS_FS_OK;
+    }
+#endif
+    if(rc!=IFS_FS_NOT_FOUND)return rc;
     rc = inspect(host, &summary);
     if (rc != IFS_FS_OK) return rc;
     rc = describe(&summary, host->volume_bytes, &measured);
@@ -217,6 +251,7 @@ static int unmount_volume_impl(void *volume)
 #ifndef IFS_UFS_FIRMWARE_BUILD
     if(ufs2_mutation_faulted(slot->writer))rc=IFS_FS_IO_ERROR;
     ufs2_relocation_release(slot->writer,slot->plan);slot->plan=NULL;slot->plan_token=0u;
+    slot->recovery_pending=0;
     ufs2_mutation_close(slot->writer);slot->writer=NULL;
 #endif
     slot->read_host=(IfsFsHostRuntimeV2){0};
@@ -249,6 +284,9 @@ static int query_volume(void *volume, IfsFsVolumeInfoV2 *info)
 }
 static int ensure_inventory(Ufs2Session *slot)
 {
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    if(slot->recovery_pending)return IFS_FS_BUSY;
+#endif
 #ifdef IFS_UFS_FIRMWARE_BUILD
     ifs_ufs_firmware_bind_host(&slot->host);
 #endif
@@ -297,6 +335,9 @@ static const IfsFsAllocationOpsV2 allocation_ops={
     .map=allocation_map
 };
 #ifndef IFS_UFS_FIRMWARE_BUILD
+static int relocation_execute(void *,void *,uint64_t *);
+static int relocation_verify(void *,void *);
+static int relocation_recover(void *,uint32_t,uint64_t *);
 static int relocation_plan(void *volume,const char *path,uint32_t policy,void **out)
 {
     if(!out)return IFS_FS_INVALID;
@@ -328,12 +369,13 @@ static const IfsFsDefragOpsV2 defrag_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsDefragOpsV2),
                IFS_FS_GROUP_DEFRAG, 0u, IFS_FS_DEFRAG_MAP
 #ifndef IFS_UFS_FIRMWARE_BUILD
-               | IFS_FS_DEFRAG_PLAN
+               | IFS_FS_DEFRAG_PLAN | IFS_FS_DEFRAG_EXECUTE | IFS_FS_DEFRAG_VERIFY | IFS_FS_DEFRAG_RECOVER
 #endif
     },
     .map = map_path
 #ifndef IFS_UFS_FIRMWARE_BUILD
-    , .plan=relocation_plan,.release_plan=relocation_release
+    , .plan=relocation_plan,.release_plan=relocation_release,
+    .execute=relocation_execute,.verify=relocation_verify,.recover=relocation_recover
 #endif
 };
 static int stat_path_impl(void *volume, const char *path, IfsFsEntryV2 *entry)
@@ -391,6 +433,52 @@ static void mutation_counts(Ufs2Session *slot)
     ufs2_mutation_counts(slot->writer,&slot->summary.free_blocks,&slot->summary.free_fragments);
     slot->info.free_bytes=(slot->summary.free_blocks*slot->summary.fragments_per_block+
         slot->summary.free_fragments)*slot->summary.fragment_size;
+}
+static int relocation_execute(void *volume,void *plan,uint64_t *moved)
+{
+    if(!moved)return IFS_FS_INVALID;
+    *moved=0u;
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot || !slot->plan || slot->plan_token!=(uintptr_t)plan)
+        return leave_operation(IFS_FS_INVALID);
+    mutation_refresh(slot);
+    int rc=ufs2_relocation_execute(slot->writer,slot->plan,moved);
+    if(rc==IFS_FS_OK)mutation_counts(slot);
+    return leave_operation(rc);
+}
+static int relocation_verify(void *volume,void *plan)
+{
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot || !slot->plan || slot->plan_token!=(uintptr_t)plan)
+        return leave_operation(IFS_FS_INVALID);
+    return leave_operation(ufs2_relocation_verify(slot->writer,slot->plan));
+}
+static int relocation_recover(void *volume,uint32_t flags,uint64_t *repaired)
+{
+    if(!repaired || flags)return IFS_FS_INVALID;
+    *repaired=0u;
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot)return leave_operation(IFS_FS_INVALID);
+    if(!slot->recovery_pending) {
+        if(slot->plan)return leave_operation(IFS_FS_BUSY);
+        if(!slot->writer)return leave_operation(IFS_FS_ACCESS);
+        return leave_operation(ufs2_mutation_faulted(slot->writer)?IFS_FS_IO_ERROR:IFS_FS_OK);
+    }
+    int rc=ufs2_relocation_recover(&slot->host,1,repaired,&slot->info);
+    if(rc!=IFS_FS_OK)return leave_operation(rc);
+    rc=inspect(&slot->host,&slot->summary);
+    if(rc==IFS_FS_OK)rc=ufs2_mutation_open(&slot->host,&slot->summary,&slot->writer);
+    if(rc!=IFS_FS_OK)return leave_operation(rc);
+    slot->read_host=slot->host;
+    slot->read_host.capabilities &= ~(IFS_FS_HOST_EXCLUSIVE|IFS_FS_HOST_DURABLE|IFS_FS_HOST_DISCARD);
+    slot->read_host.capabilities |= IFS_FS_HOST_READ_ONLY;
+    slot->read_host.write_at=NULL;slot->read_host.flush=NULL;slot->read_host.discard=NULL;
+    slot->recovery_pending=0;
+    mutation_counts(slot);
+    return leave_operation(IFS_FS_OK);
 }
 static int create_file(void *volume,const char *path,uint32_t type)
 {
@@ -654,6 +742,9 @@ static int volume_label(void *volume,char *out,uint32_t capacity,uint32_t *bytes
     if(!enter_operation())return IFS_FS_BUSY;
     Ufs2Session *slot=find_session(volume);
     if(!slot)return leave_operation(IFS_FS_INVALID);
+    #ifndef IFS_UFS_FIRMWARE_BUILD
+    if(slot->recovery_pending)return leave_operation(IFS_FS_BUSY);
+    #endif
     uint32_t n=0;
     while(n<sizeof(slot->summary.volume_label) && slot->summary.volume_label[n])++n;
     if(n>=capacity)return leave_operation(IFS_FS_NO_SPACE);

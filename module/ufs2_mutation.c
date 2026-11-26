@@ -9,6 +9,7 @@
 #include "ufs2_mutation.h"
 #include <string.h>
 #include <stdint.h>
+#include <openssl/sha.h>
 
 enum { SB_BYTES=8192, SB_PRIMARY=65536, INODE_BYTES=256, INODES=256,
        CG_IUSED=168, CG_FREE=200, DIR_BYTES=512, MAX_BLOCK=65536,
@@ -22,9 +23,10 @@ struct Ufs2Mutation {
     int faulted;
 };
 typedef struct {uint32_t old,oldn,at,n;} BlockPlan;
-typedef struct {uint32_t inode,first,fragments,reserve;uint64_t size;int relocate;} Ufs2Placement;
+typedef struct {uint32_t inode,first,fragments,reserve,indirect;uint64_t size;int relocate;} Ufs2Placement;
 struct Ufs2RelocationPlan {
-    uint32_t policy,count;
+    uint32_t policy,count,journal_first,journal_fragments;
+    int completed;
     Ufs2Placement entries[INODES];
 };
 
@@ -331,18 +333,14 @@ static int begin(Ufs2Mutation *w)
     if(rc==IFS_FS_OK)rc=barrier(w);
     return rc==IFS_FS_OK?rc:poison(w,rc);
 }
-static int finish(Ufs2Mutation *w)
+static void prepare_counts(Ufs2Mutation *w,uint8_t summary[16])
 {
-    /* All data and inode/directory pointers have been written under the
-     * dirty superblocks. Publish matching CG and both summary copies,
-     * flush them, then publish clean backup and finally clean primary. */
     count_free(w,w->cg,&w->counts);
     Counts *c=&w->counts;
-    uint8_t summary[16];
     put32(summary,1u);put32(summary+4,c->blocks);
     put32(summary+8,c->inodes);put32(summary+12,c->frags);
-    memcpy(w->cg+24,summary,sizeof(summary));
-    memcpy(w->sb+192,summary,sizeof(summary));
+    memcpy(w->cg+24,summary,16u);
+    memcpy(w->sb+192,summary,16u);
     for(uint32_t i=1;i<8u;++i)put32(w->cg+52u+4u*i,c->runs[i]);
     put64(w->sb+1008,1u);put64(w->sb+1016,c->blocks);
     put64(w->sb+1024,c->inodes);put64(w->sb+1032,c->frags);
@@ -350,6 +348,10 @@ static int finish(Ufs2Mutation *w)
     put64(w->cg+136,seconds);put64(w->sb+1072,seconds);
     put32(w->sb+32,(uint32_t)seconds);
     put32(w->sb+1352,0x7c269d38u-(uint32_t)seconds);
+}
+static int finish(Ufs2Mutation *w)
+{
+    uint8_t summary[16];prepare_counts(w,summary);
     int rc=wr(w,disk(w,w->cblk),w->cg,w->cgsize);
     if(rc==IFS_FS_OK)rc=wr(w,disk(w,w->dblk),summary,sizeof(summary));
     if(rc==IFS_FS_OK)rc=write_super(w,0,0);
@@ -529,6 +531,88 @@ done:
     return rc;
 }
 
+/* Private native redo format for the non-bootable, formatter-owned UFS2
+ * profile. The first boot sector is temporary recovery metadata ONLY
+ * when the entire 8 KiB boot area was zero. It is restored to zero after
+ * publication. The journal is in a free run disjoint from all placements
+ * and contains both complete before and after images of fixed metadata.
+ * All geometry is independently derived from the host, never the record. */
+enum { REDO_RANGES=5, REDO_BOOT=8192, REDO_HEADER=80 };
+static const uint8_t redo_magic[8]={'I','F','S','2','R','E','D','O'};
+typedef struct {
+    uint32_t fsize,bsize,total,half,bytes,fragments;
+    uint64_t at[REDO_RANGES];
+    uint32_t len[REDO_RANGES],pos[REDO_RANGES];
+} RedoLayout;
+static int redo_layout(const IfsFsHostRuntimeV2 *h,RedoLayout *l)
+{
+    if(!ifs_fs_host_v2_valid(h) || h->volume_bytes<16ull*1024u*1024u ||
+       h->volume_bytes>2ull*1024u*1024u*1024u)return IFS_FS_UNSUPPORTED;
+    const int large=h->volume_bytes>128ull*1024u*1024u;
+    const uint32_t b=large?65536u:16384u,f=large?8192u:4096u;
+    const uint32_t ipg=INODES,frag=b/f;
+    if(h->volume_bytes%b || h->logical_sector_bytes>f ||
+       h->physical_sector_bytes!=h->logical_sector_bytes)
+        return IFS_FS_UNSUPPORTED;
+    const uint32_t total=(uint32_t)(h->volume_bytes/f);
+    const uint32_t sblk=(SB_PRIMARY+SB_BYTES+b-1u)/b*frag;
+    const uint32_t cblk=sblk+frag,iblk=cblk+frag;
+    const uint32_t dblk=iblk+ipg*INODE_BYTES/f;
+    const uint32_t freeoff=CG_FREE;
+    const uint32_t cgsize=(freeoff+(total+7u)/8u+f-1u)/f*f;
+    if(cgsize>b || total<=dblk+2u)return IFS_FS_UNSUPPORTED;
+    *l=(RedoLayout){.fsize=f,.bsize=b,.total=total,
+        .at={SB_PRIMARY,(uint64_t)sblk*f,(uint64_t)cblk*f,(uint64_t)iblk*f,(uint64_t)dblk*f},
+        .len={SB_BYTES,SB_BYTES,cgsize,ipg*INODE_BYTES,f}};
+    for(unsigned i=0;i<REDO_RANGES;++i){l->pos[i]=l->half;l->half+=l->len[i];}
+    l->bytes=2u*l->half;l->fragments=l->bytes/f;
+    return IFS_FS_OK;
+}
+static int redo_zero(const uint8_t *p,uint32_t n)
+{
+    for(uint32_t i=0;i<n;++i)if(p[i])return 0;
+    return 1;
+}
+static int redo_header(const IfsFsHostRuntimeV2 *h,RedoLayout *l,
+                       uint8_t marker[REDO_BOOT],uint32_t *first)
+{
+    int rc=ifs_fs_host_read_bytes_v2(h,0u,marker,REDO_BOOT);
+    if(rc!=IFS_FS_OK)return rc;
+    if(memcmp(marker,redo_magic,sizeof(redo_magic)))
+        return !memcmp(marker,redo_magic,4u)?IFS_FS_CORRUPT:IFS_FS_NOT_FOUND;
+    rc=redo_layout(h,l);if(rc!=IFS_FS_OK)return rc;
+    uint8_t digest[SHA256_DIGEST_LENGTH];
+    if(!SHA256(marker,48u,digest) || memcmp(digest,marker+48u,sizeof(digest)) ||
+       !redo_zero(marker+REDO_HEADER,REDO_BOOT-REDO_HEADER))
+        return IFS_FS_CORRUPT;
+    *first=get32(marker+8u);
+    if(get32(marker+12u)!=l->bytes || !*first || *first>=l->total ||
+       l->fragments>l->total-*first ||
+       (uint64_t)*first*l->fsize<l->at[4]+2ull*l->fsize)
+        return IFS_FS_CORRUPT;
+    return IFS_FS_OK;
+}
+int ufs2_relocation_marker(const IfsFsHostRuntimeV2 *h)
+{
+    RedoLayout l;uint8_t marker[REDO_BOOT];uint32_t first;
+    return redo_header(h,&l,marker,&first);
+}
+static uint32_t placement_run(const Ufs2Mutation *w,const uint8_t *map,uint32_t need)
+{
+    uint32_t run=0u;
+    for(uint32_t i=w->root+1u;i<w->total;++i) {
+        if(!(i%4096u) && cancelled(w))return 0u;
+        if(!bit(map,i)){run=0u;continue;}
+        if(!run && i%w->frag)continue;
+        if(++run==need)return i+1u-need;
+    }
+    return 0u;
+}
+static void placement_take(uint8_t *map,uint32_t first,uint32_t count)
+{
+    for(uint32_t i=0;i<count;++i)setbit(map,first+i,0u);
+}
+
 /* Plan against an independent copy of the authoritative native fragment
  * bitmap. A destination is entirely free before publication: no overlap
  * with any existing inode, indirect block, or another planned growth gap.
@@ -593,22 +677,35 @@ int ufs2_relocation_plan(Ufs2Mutation *w,const char *path,uint32_t policy,
         if(packed && gap && !placement_free(w,map,end,gap))packed=0;
         if(!packed) {
             uint32_t need=used+gap;
-            uint32_t run=0u;
-            first=0u;
-            /* Every full logical block begins at a native block boundary;
-             * starting at such a boundary also fits a final short run. */
-            for(uint32_t i=w->root+1u;i<w->total;++i) {
-                if(!(i%4096u) && cancelled(w)){rc=IFS_FS_BUSY;goto done;}
-                if(!bit(map,i)){run=0u;continue;}
-                if(!run && i%w->frag)continue;
-                if(++run==need){first=i+1u-need;break;}
-            }
-            if(!first){rc=IFS_FS_NO_SPACE;goto done;}
-            for(uint32_t i=0;i<need;++i)setbit(map,first+i,0u);
+            first=placement_run(w,map,need);
+            if(!first){rc=cancelled(w)?IFS_FS_BUSY:IFS_FS_NO_SPACE;goto done;}
+            placement_take(map,first,need);
         } else {
             for(uint32_t i=0;i<gap;++i)setbit(map,end+i,0u);
         }
-        p->entries[p->count++]=(Ufs2Placement){n,first,used,gap,size,!packed};
+        p->entries[p->count++]=(Ufs2Placement){n,first,used,gap,0u,size,!packed};
+    }
+    unsigned moves=0u;
+    for(uint32_t i=0;i<p->count;++i) {
+        Ufs2Placement *entry=&p->entries[i];
+        if(!entry->relocate)continue;
+        ++moves;
+        if(blocks_for(w,entry->size)>12u) {
+            entry->indirect=placement_run(w,map,w->frag);
+            if(!entry->indirect){rc=cancelled(w)?IFS_FS_BUSY:IFS_FS_NO_SPACE;goto done;}
+            placement_take(map,entry->indirect,w->frag);
+        }
+    }
+    if(moves) {
+        RedoLayout l;uint8_t boot[REDO_BOOT];
+        rc=redo_layout(w->host,&l);
+        if(rc!=IFS_FS_OK)goto done;
+        rc=rd(w,0u,boot,sizeof(boot));
+        if(rc!=IFS_FS_OK)goto done;
+        if(!redo_zero(boot,sizeof(boot))){rc=IFS_FS_ACCESS;goto done;}
+        p->journal_fragments=l.fragments;
+        p->journal_first=placement_run(w,map,l.fragments);
+        if(!p->journal_first){rc=cancelled(w)?IFS_FS_BUSY:IFS_FS_NO_SPACE;goto done;}
     }
     *out=p;p=NULL;rc=IFS_FS_OK;
 done:
@@ -620,4 +717,350 @@ done:
 void ufs2_relocation_release(Ufs2Mutation *w,Ufs2RelocationPlan *p)
 {
     if(w && p)w->host->release(w->host->context,p);
+}
+
+/* All callbacks are serialized by the module's operation gate. Overlay
+ * only the fixed metadata ranges when independently reopening the journal
+ * before/after images through the production native reader. Data and
+ * indirect blocks must already exist durably at their real locations. */
+static struct {
+    const IfsFsHostRuntimeV2 *base;
+    const RedoLayout *layout;
+    const uint8_t *image;
+} redo_overlay;
+static int redo_read(void *context,uint64_t at,void *out,uint32_t bytes)
+{
+    if(!redo_overlay.base || redo_overlay.base->read_at(context,at,out,bytes))
+        return -1;
+    const RedoLayout *l=redo_overlay.layout;
+    uint8_t *dst=out;
+    for(unsigned i=0;i<REDO_RANGES;++i) {
+        uint64_t lo=at>l->at[i]?at:l->at[i];
+        uint64_t hi=at+bytes<l->at[i]+l->len[i]?at+bytes:l->at[i]+l->len[i];
+        if(lo<hi)memcpy(dst+(size_t)(lo-at),redo_overlay.image+l->pos[i]+
+            (size_t)(lo-l->at[i]),(size_t)(hi-lo));
+    }
+    return 0;
+}
+static int redo_open(const IfsFsHostRuntimeV2 *h,const RedoLayout *l,
+                     const uint8_t *image,Ufs2Mutation **out)
+{
+    IfsFsHostRuntimeV2 overlay={0};
+    size_t host_bytes=h->structure_bytes<sizeof(overlay)?h->structure_bytes:sizeof(overlay);
+    memcpy(&overlay,h,host_bytes);overlay.structure_bytes=(uint32_t)host_bytes;
+    overlay.read_at=redo_read;
+    redo_overlay.base=h;redo_overlay.layout=l;redo_overlay.image=image;
+    LdUfsSummary summary;
+    int rc=ufs_read_summary_host_v2(&overlay,&summary);
+    if(rc==IFS_FS_OK)rc=ufs2_mutation_open(&overlay,&summary,out);
+    redo_overlay.base=NULL;redo_overlay.layout=NULL;redo_overlay.image=NULL;
+    if(rc==IFS_FS_OK)(*out)->host=h;
+    return rc;
+}
+/* A replay may encounter any mix of already-published and original
+ * metadata, including interrupted logical-sector writes. Every observed
+ * byte must belong to the recorded before/after state (or the temporary
+ * dirty indication). Do not let an unrelated stale record rewrite media. */
+static int redo_current_matches(const IfsFsHostRuntimeV2 *h,const RedoLayout *l,
+                                const uint8_t *images)
+{
+    uint8_t *current=h->allocate(h->context,l->bsize);
+    if(!current)return IFS_FS_NO_MEMORY;
+    int rc=IFS_FS_OK;
+    for(unsigned i=0;i<REDO_RANGES && rc==IFS_FS_OK;++i) {
+        for(uint32_t offset=0u;offset<l->len[i];) {
+            uint32_t n=l->len[i]-offset;
+            if(n>l->bsize)n=l->bsize;
+            rc=ifs_fs_host_read_bytes_v2(h,l->at[i]+offset,current,n);
+            if(rc!=IFS_FS_OK)break;
+            const uint8_t *old=images+l->pos[i]+offset;
+            const uint8_t *next=old+l->half;
+            for(uint32_t j=0;j<n;++j) {
+                if(current[j]==old[j] || current[j]==next[j] ||
+                   (i<2u && offset+j==209u && !current[j]))continue;
+                rc=IFS_FS_CORRUPT;break;
+            }
+            offset+=n;
+        }
+    }
+    h->release(h->context,current);return rc;
+}
+/* Before any replay write, both snapshots must independently describe the
+ * same complete namespace. Every changed data or indirect pointer must
+ * reference an initially free destination and byte-identical file data.
+ * The temporary journal remains free in both allocation snapshots. */
+static int redo_validate(const IfsFsHostRuntimeV2 *h,const RedoLayout *l,
+                         const uint8_t *images,uint32_t first,
+                         IfsFsVolumeInfoV2 *info)
+{
+    Ufs2Mutation *old=NULL,*next=NULL;
+    int rc=redo_current_matches(h,l,images);
+    if(rc==IFS_FS_OK)rc=redo_open(h,l,images,&old);
+    if(rc==IFS_FS_OK)rc=redo_open(h,l,images+l->half,&next);
+    if(rc!=IFS_FS_OK)goto done;
+    if(old->bsize!=l->bsize || next->bsize!=l->bsize ||
+       old->fsize!=l->fsize || next->fsize!=l->fsize ||
+       old->total!=l->total || next->total!=l->total ||
+       memcmp(old->dir,next->dir,DIR_BYTES) ||
+       memcmp(old->cg+CG_IUSED,next->cg+CG_IUSED,INODES/8u) ||
+       !placement_free(old,old->cg+CG_FREE,first,l->fragments) ||
+       !placement_free(next,next->cg+CG_FREE,first,l->fragments) ||
+       (uint64_t)old->counts.blocks*old->frag+old->counts.frags !=
+       (uint64_t)next->counts.blocks*next->frag+next->counts.frags) {
+        rc=IFS_FS_CORRUPT;goto done;
+    }
+    uint8_t normalized_sb[SB_BYTES];
+    memcpy(normalized_sb,next->sb,SB_BYTES);
+    /* Only count summaries and publication timestamps are mutable. */
+    memcpy(normalized_sb+32u,old->sb+32u,4u);
+    memcpy(normalized_sb+192u,old->sb+192u,16u);
+    memcpy(normalized_sb+1008u,old->sb+1008u,32u);
+    memcpy(normalized_sb+1072u,old->sb+1072u,8u);
+    memcpy(normalized_sb+1352u,old->sb+1352u,4u);
+    if(memcmp(normalized_sb,old->sb,SB_BYTES)) {
+        rc=IFS_FS_CORRUPT;goto done;
+    }
+    uint8_t *buf=h->allocate(h->context,4u*l->bsize);
+    if(!buf){rc=IFS_FS_NO_MEMORY;goto done;}
+    uint8_t *oi=buf,*ni=buf+l->bsize,*od=buf+2u*l->bsize,*nd=buf+3u*l->bsize;
+    for(uint32_t n=0;n<INODES;++n) {
+        const uint8_t *a=old->inodes+n*INODE_BYTES,*b=next->inodes+n*INODE_BYTES;
+        if(n<3u || !bit(old->cg+CG_IUSED,n)) {
+            if(memcmp(a,b,INODE_BYTES)){rc=IFS_FS_CORRUPT;break;}
+            continue;
+        }
+        if(memcmp(a,b,112u) || memcmp(a+216u,b+216u,INODE_BYTES-216u)) {
+            rc=IFS_FS_CORRUPT;break;
+        }
+        const uint64_t size=get64(a+16u);
+        const uint32_t blocks=blocks_for(old,size);
+        if(blocks>12u) {
+            const uint32_t x=(uint32_t)get64(a+208u),y=(uint32_t)get64(b+208u);
+            if(x!=y && !placement_free(old,old->cg+CG_FREE,y,old->frag)) {
+                rc=IFS_FS_CORRUPT;break;
+            }
+            rc=rd(old,disk(old,x),oi,old->bsize);
+            if(rc==IFS_FS_OK)rc=rd(next,disk(next,y),ni,next->bsize);
+            if(rc!=IFS_FS_OK)break;
+        }
+        for(uint32_t j=0;j<blocks;++j) {
+            const uint32_t x=j<12u?get64(a+112u+8u*j):get64(oi+8u*(j-12u));
+            const uint32_t y=j<12u?get64(b+112u+8u*j):get64(ni+8u*(j-12u));
+            if(x==y)continue;
+            const uint32_t count=frags_for(old,size,j);
+            if(!placement_free(old,old->cg+CG_FREE,y,count)) {
+                rc=IFS_FS_CORRUPT;break;
+            }
+            rc=rd(old,disk(old,x),od,count*old->fsize);
+            if(rc==IFS_FS_OK)rc=rd(next,disk(next,y),nd,count*next->fsize);
+            if(rc!=IFS_FS_OK)break;
+            if(memcmp(od,nd,count*old->fsize)){rc=IFS_FS_CORRUPT;break;}
+        }
+        if(rc!=IFS_FS_OK)break;
+    }
+    h->release(h->context,buf);
+    if(rc==IFS_FS_OK && info) {
+        *info=(IfsFsVolumeInfoV2){.structure_bytes=sizeof(*info),
+            .variant=LD_UFS_VARIANT_UFS2_LE,.max_name_bytes=255u,
+            .block_bytes=next->bsize,.total_bytes=h->volume_bytes,
+            .free_bytes=((uint64_t)next->counts.blocks*next->frag+next->counts.frags)*next->fsize};
+    }
+done:
+    ufs2_mutation_close(old);ufs2_mutation_close(next);
+    return rc;
+}
+static int redo_flush(const IfsFsHostRuntimeV2 *h)
+{return h->flush(h->context)==0?IFS_FS_OK:IFS_FS_IO_ERROR;}
+static int redo_apply(const IfsFsHostRuntimeV2 *h,const RedoLayout *l,const uint8_t *images)
+{
+    uint8_t sb[SB_BYTES],zero[REDO_BOOT]={0};
+    const uint8_t *next=images+l->half;
+    int rc=IFS_FS_OK;
+    /* Preserve a conventional dirty indication while metadata is being
+     * replaced. The locator remains durable until BOTH clean copies and
+     * the entire fixed metadata set have been durably published. */
+    for(unsigned i=0;i<2u && rc==IFS_FS_OK;++i) {
+        memcpy(sb,images+l->pos[i],sizeof(sb));sb[209]=0u;
+        rc=ifs_fs_host_write_bytes_v2(h,l->at[i],sb,sizeof(sb));
+    }
+    if(rc==IFS_FS_OK)rc=redo_flush(h);
+    for(unsigned i=2u;i<REDO_RANGES && rc==IFS_FS_OK;++i)
+        rc=ifs_fs_host_write_bytes_v2(h,l->at[i],next+l->pos[i],l->len[i]);
+    if(rc==IFS_FS_OK)rc=redo_flush(h);
+    for(int i=1;i>=0 && rc==IFS_FS_OK;--i) {
+        rc=ifs_fs_host_write_bytes_v2(h,l->at[i],next+l->pos[i],l->len[i]);
+        if(rc==IFS_FS_OK)rc=redo_flush(h);
+    }
+    if(rc==IFS_FS_OK)rc=ifs_fs_host_write_bytes_v2(h,0u,zero,h->logical_sector_bytes);
+    if(rc==IFS_FS_OK)rc=redo_flush(h);
+    return rc;
+}
+int ufs2_relocation_recover(const IfsFsHostRuntimeV2 *h,int apply,
+                           uint64_t *repaired,IfsFsVolumeInfoV2 *info)
+{
+    if(!repaired || !ifs_fs_host_v2_valid(h))return IFS_FS_INVALID;
+    *repaired=0u;
+    if((h->capabilities&IFS_FS_HOST_READ_ONLY) ||
+       !(h->capabilities&IFS_FS_HOST_EXCLUSIVE) ||
+       !(h->capabilities&IFS_FS_HOST_DURABLE))return IFS_FS_ACCESS;
+    RedoLayout l;uint8_t marker[REDO_BOOT],digest[SHA256_DIGEST_LENGTH];uint32_t first;
+    int rc=redo_header(h,&l,marker,&first);
+    if(rc!=IFS_FS_OK)return rc;
+    uint8_t *images=h->allocate(h->context,l.bytes);
+    if(!images)return IFS_FS_NO_MEMORY;
+    rc=ifs_fs_host_read_bytes_v2(h,(uint64_t)first*l.fsize,images,l.bytes);
+    if(rc==IFS_FS_OK && (!SHA256(images,l.bytes,digest) ||
+                        memcmp(digest,marker+16u,sizeof(digest))))rc=IFS_FS_CORRUPT;
+    if(rc==IFS_FS_OK)rc=redo_validate(h,&l,images,first,info);
+    if(rc==IFS_FS_OK && apply) {
+        rc=redo_apply(h,&l,images);
+        if(rc==IFS_FS_OK)*repaired=1u;
+    }
+    h->release(h->context,images);return rc;
+}
+int ufs2_relocation_verify(Ufs2Mutation *w,Ufs2RelocationPlan *p)
+{
+    if(!w || !p || !p->completed)return IFS_FS_INVALID;
+    if(w->faulted)return IFS_FS_IO_ERROR;
+    int rc=validate_namespace(w);
+    if(rc!=IFS_FS_OK)return rc;
+    uint8_t *ind=w->host->allocate(w->host->context,w->bsize);
+    if(!ind)return IFS_FS_NO_MEMORY;
+    for(uint32_t i=0;i<p->count;++i) {
+        const Ufs2Placement *e=&p->entries[i];
+        const uint8_t *ino=w->inodes+e->inode*INODE_BYTES;
+        const uint32_t blocks=blocks_for(w,e->size);
+        uint32_t at=e->first;
+        if(get64(ino+16u)!=e->size){rc=IFS_FS_CORRUPT;break;}
+        if(blocks>12u) {
+            rc=rd(w,disk(w,(uint32_t)get64(ino+208u)),ind,w->bsize);
+            if(rc!=IFS_FS_OK)break;
+        }
+        for(uint32_t j=0;j<blocks;++j) {
+            uint32_t actual=j<12u?get64(ino+112u+8u*j):get64(ind+8u*(j-12u));
+            if(actual!=at){rc=IFS_FS_CORRUPT;break;}
+            at+=frags_for(w,e->size,j);
+        }
+        if(rc!=IFS_FS_OK)break;
+        if(at!=e->first+e->fragments ||
+           (e->reserve && !placement_free(w,w->cg+CG_FREE,at,e->reserve))) {
+            rc=IFS_FS_CORRUPT;break;
+        }
+    }
+    w->host->release(w->host->context,ind);return rc;
+}
+int ufs2_relocation_execute(Ufs2Mutation *w,Ufs2RelocationPlan *p,uint64_t *moved)
+{
+    if(!moved)return IFS_FS_INVALID;
+    *moved=0u;
+    if(!w || !p || p->completed)return IFS_FS_INVALID;
+    if(w->faulted)return IFS_FS_IO_ERROR;
+    if(cancelled(w))return IFS_FS_BUSY;
+    if(!p->journal_first){p->completed=1;return ufs2_relocation_verify(w,p);}
+    RedoLayout l;int rc=redo_layout(w->host,&l);
+    if(rc!=IFS_FS_OK)return rc;
+    if(l.fragments!=p->journal_fragments ||
+       !placement_free(w,w->cg+CG_FREE,p->journal_first,l.fragments))
+        return IFS_FS_CORRUPT;
+    const IfsFsHostRuntimeV2 *h=w->host;
+    Ufs2Mutation *stage=h->allocate(h->context,sizeof(*stage));
+    uint8_t *images=h->allocate(h->context,l.bytes);
+    uint8_t *buf=h->allocate(h->context,2u*w->bsize);
+    uint8_t marker[REDO_BOOT],summary[16];uint64_t bytes=0u;
+    int published=0;
+    if(!stage || !images || !buf){rc=IFS_FS_NO_MEMORY;goto done;}
+    *stage=*w;
+    rc=rd(w,0u,marker,sizeof(marker));
+    if(rc!=IFS_FS_OK)goto done;
+    if(!redo_zero(marker,sizeof(marker))){rc=IFS_FS_ACCESS;goto done;}
+    for(unsigned i=0;i<REDO_RANGES;++i) {
+        rc=rd(w,l.at[i],images+l.pos[i],l.len[i]);
+        if(rc!=IFS_FS_OK)goto done;
+    }
+    memcpy(images+l.half,images,l.half);
+    uint8_t *ind=buf,*data=buf+w->bsize;
+    /* Copy-before-switch. The plan reserved all destinations, growth
+     * gaps, indirect blocks and journal against the ORIGINAL bitmap. */
+    for(uint32_t i=0;i<p->count;++i) {
+        const Ufs2Placement *e=&p->entries[i];
+        if(!e->relocate)continue;
+        uint8_t *ino=stage->inodes+e->inode*INODE_BYTES;
+        const uint32_t blocks=blocks_for(w,e->size);
+        const uint32_t oldind=(uint32_t)get64(ino+208u);
+        uint32_t at=e->first;
+        if(!placement_free(w,w->cg+CG_FREE,at,e->fragments+e->reserve) ||
+           get64(ino+16u)!=e->size){rc=IFS_FS_CORRUPT;goto done;}
+        if(blocks>12u) {
+            if(!oldind || !e->indirect ||
+               !placement_free(w,w->cg+CG_FREE,e->indirect,w->frag)) {
+                rc=IFS_FS_CORRUPT;goto done;
+            }
+            rc=rd(w,disk(w,oldind),ind,w->bsize);
+            if(rc!=IFS_FS_OK)goto done;
+        }
+        for(uint32_t j=0;j<blocks;++j) {
+            if(cancelled(w)){rc=IFS_FS_BUSY;goto done;}
+            uint8_t *ptr=pointer(ino,ind,j);
+            const uint32_t old=(uint32_t)get64(ptr),count=frags_for(w,e->size,j);
+            if(!valid_run(w,old,count) || !valid_run(w,at,count)) {
+                rc=IFS_FS_CORRUPT;goto done;
+            }
+            rc=rd(w,disk(w,old),data,count*w->fsize);
+            if(rc==IFS_FS_OK)rc=wr(w,disk(w,at),data,count*w->fsize);
+            if(rc!=IFS_FS_OK)goto done;
+            put64(ptr,at);
+            for(uint32_t k=0;k<count;++k) {
+                setbit(stage->cg+CG_FREE,old+k,1u);
+                setbit(stage->cg+CG_FREE,at+k,0u);
+            }
+            at+=count;
+        }
+        if(at!=e->first+e->fragments){rc=IFS_FS_CORRUPT;goto done;}
+        if(blocks>12u) {
+            rc=wr(w,disk(w,e->indirect),ind,w->bsize);
+            if(rc!=IFS_FS_OK)goto done;
+            put64(ino+208u,e->indirect);
+            for(uint32_t k=0;k<w->frag;++k) {
+                setbit(stage->cg+CG_FREE,oldind+k,1u);
+                setbit(stage->cg+CG_FREE,e->indirect+k,0u);
+            }
+        }
+        bytes+=e->size;
+    }
+    rc=barrier(w);if(rc!=IFS_FS_OK)goto done;
+    prepare_counts(stage,summary);
+    stage->sb[209]=1u;
+    uint8_t *next=images+l.half;
+    memcpy(next+l.pos[0],stage->sb,SB_BYTES);
+    memcpy(next+l.pos[1],stage->sb,SB_BYTES);
+    put64(next+l.pos[1]+992u,l.at[1]);
+    memcpy(next+l.pos[2],stage->cg,stage->cgsize);
+    memcpy(next+l.pos[3],stage->inodes,INODES*INODE_BYTES);
+    memcpy(next+l.pos[4],summary,sizeof(summary));
+    rc=redo_validate(h,&l,images,p->journal_first,NULL);
+    if(rc!=IFS_FS_OK)goto done;
+    rc=wr(w,disk(w,p->journal_first),images,l.bytes);
+    if(rc==IFS_FS_OK)rc=barrier(w);
+    if(rc!=IFS_FS_OK)goto done;
+    memcpy(marker,redo_magic,sizeof(redo_magic));
+    put32(marker+8u,p->journal_first);put32(marker+12u,l.bytes);
+    uint8_t marker_hash[SHA256_DIGEST_LENGTH];
+    if(!SHA256(images,l.bytes,marker+16u) || !SHA256(marker,48u,marker_hash)){
+        rc=IFS_FS_IO_ERROR;goto done;
+    }
+    memcpy(marker+48u,marker_hash,sizeof(marker_hash));
+    published=1; /* even a failed locator write requires a cold check */
+    rc=wr(w,0u,marker,h->logical_sector_bytes);
+    if(rc==IFS_FS_OK)rc=barrier(w);
+    if(rc==IFS_FS_OK)rc=redo_apply(h,&l,images);
+    if(rc!=IFS_FS_OK)goto done;
+    *w=*stage;p->completed=1;
+    rc=ufs2_relocation_verify(w,p);
+    if(rc==IFS_FS_OK)*moved=bytes;
+done:
+    if(rc!=IFS_FS_OK && published)w->faulted=1;
+    if(stage)h->release(h->context,stage);
+    if(images)h->release(h->context,images);
+    if(buf)h->release(h->context,buf);
+    return rc;
 }

@@ -167,9 +167,9 @@ int main(void)
     const IfsFsDefragOpsV2 *defrag=(const IfsFsDefragOpsV2 *)
         ifs_fs_group_v2(api,IFS_FS_GROUP_DEFRAG);
     CHECK(core && ops && defrag);
-    CHECK(defrag->header.capabilities==(IFS_FS_DEFRAG_MAP|IFS_FS_DEFRAG_PLAN));
-    CHECK(defrag->map && defrag->plan && !defrag->execute &&
-          !defrag->verify && !defrag->recover && defrag->release_plan);
+    CHECK(defrag->header.capabilities==IFS_FS_DEFRAG_ALL);
+    CHECK(defrag->map && defrag->plan && defrag->execute &&
+          defrag->verify && defrag->recover && defrag->release_plan);
     CHECK(core->header.capabilities==(IFS_FS_CORE_PROBE|IFS_FS_CORE_MOUNT|
            IFS_FS_CORE_STAT|IFS_FS_CORE_LIST|IFS_FS_CORE_READ|IFS_FS_CORE_CREATE|IFS_FS_CORE_WRITE));
     CHECK(ops->header.capabilities==(IFS_FS_VOLUME_QUERY|IFS_FS_VOLUME_FORMAT|IFS_FS_VOLUME_LABEL_GET));
