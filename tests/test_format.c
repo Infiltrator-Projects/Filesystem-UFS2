@@ -112,8 +112,26 @@ int main(int argc,char **argv)
     CHECK(core->write(mount,"/alpha",1u,data+1,511u)==IFS_FS_OK);
     CHECK(core->write(mount,"/alpha",(uint64_t)15u*block,data,1u)==IFS_FS_UNSUPPORTED);
     CHECK(core->stat(mount,"/alpha",&entry)==IFS_FS_OK && entry.size_bytes==(uint64_t)14u*block);
+    const IfsFsDefragOpsV2 *planner=(const void*)ifs_fs_group_v2(api,IFS_FS_GROUP_DEFRAG);
+    CHECK(planner && planner->plan && planner->release_plan);
+    unsigned before_plan=m.writes;
+    void *plan=NULL,*other=NULL;
+    CHECK(planner->plan(mount,"/missing",0u,&plan)==IFS_FS_NOT_FOUND && !plan);
+    CHECK(planner->plan(mount,"/",1u,&plan)==IFS_FS_INVALID && !plan);
+    CHECK(planner->plan(mount,"/",0u,&plan)==IFS_FS_OK && plan);
+    CHECK(planner->plan(mount,"/",10u,&other)==IFS_FS_BUSY && !other);
+    CHECK(core->write(mount,"/alpha",0u,data,1u)==IFS_FS_BUSY);
+    CHECK(core->create(mount,"/blocked",IFS_FS_ENTRY_FILE)==IFS_FS_BUSY);
+    planner->release_plan(mount,plan);
+    CHECK(planner->plan(mount,"/alpha",10u,&other)==IFS_FS_OK && other && other!=plan);
+    planner->release_plan(mount,plan);
+    CHECK(planner->plan(mount,"/",0u,&plan)==IFS_FS_BUSY && !plan);
+    planner->release_plan(mount,other);
+    CHECK(planner->plan(mount,"/",10u,&plan)==IFS_FS_OK && plan);
+    CHECK(m.writes==before_plan);
     CHECK(core->unmount(mount)==IFS_FS_OK);
     CHECK(core->mount(&ro,&mount,&info)==IFS_FS_OK && mount);
+    CHECK(planner->plan(mount,"/",0u,&other)==IFS_FS_ACCESS && !other);
     CHECK(core->write(mount,"/alpha",0u,data,1u)==IFS_FS_ACCESS);
     CHECK(core->create(mount,"/no",IFS_FS_ENTRY_FILE)==IFS_FS_ACCESS);
     for(uint32_t i=0;i<14u;++i) {

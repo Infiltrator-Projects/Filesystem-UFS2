@@ -22,6 +22,11 @@ struct Ufs2Mutation {
     int faulted;
 };
 typedef struct {uint32_t old,oldn,at,n;} BlockPlan;
+typedef struct {uint32_t inode,first,fragments,reserve;uint64_t size;int relocate;} Ufs2Placement;
+struct Ufs2RelocationPlan {
+    uint32_t policy,count;
+    Ufs2Placement entries[INODES];
+};
 
 static uint16_t get16(const uint8_t *p)
 {return (uint16_t)(p[0]|((uint16_t)p[1]<<8));}
@@ -522,4 +527,97 @@ done:
     if(data)w->host->release(w->host->context,data);
     if(plan)w->host->release(w->host->context,plan);
     return rc;
+}
+
+/* Plan against an independent copy of the authoritative native fragment
+ * bitmap. A destination is entirely free before publication: no overlap
+ * with any existing inode, indirect block, or another planned growth gap.
+ * This conservative placement does not promise in-place compaction. */
+static int placement_free(const Ufs2Mutation *w,const uint8_t *map,
+                          uint32_t first,uint32_t count)
+{
+    if(first>=w->total || count>w->total-first)return 0;
+    for(uint32_t i=0;i<count;++i)if(!bit(map,first+i))return 0;
+    return 1;
+}
+int ufs2_relocation_plan(Ufs2Mutation *w,const char *path,uint32_t policy,
+                         Ufs2RelocationPlan **out)
+{
+    if(!out)return IFS_FS_INVALID;
+    *out=NULL;
+    if(!w || !path || (policy!=0u && policy!=10u))return IFS_FS_INVALID;
+    if(w->faulted)return IFS_FS_IO_ERROR;
+    if(cancelled(w))return IFS_FS_BUSY;
+    uint32_t selected=0u;
+    if(strcmp(path,"/")) {
+        const char *name;uint32_t n;
+        int rc=root_name(path,&name,&n);
+        if(rc!=IFS_FS_OK)return rc;
+        rc=lookup(w,name,n,&selected);
+        if(rc!=IFS_FS_OK)return rc;
+        if(selected<3u)return IFS_FS_INVALID;
+    }
+    Ufs2RelocationPlan *p=w->host->allocate(w->host->context,sizeof(*p));
+    uint8_t *map=w->host->allocate(w->host->context,(w->total+7u)/8u);
+    uint8_t *ind=w->host->allocate(w->host->context,w->bsize);
+    int rc=IFS_FS_NO_MEMORY;
+    if(!p || !map || !ind)goto done;
+    memset(p,0,sizeof(*p));p->policy=policy;
+    memcpy(map,w->cg+CG_FREE,(w->total+7u)/8u);
+    for(uint32_t n=3u;n<INODES;++n) {
+        if(selected && selected!=n)continue;
+        if(!bit(w->cg+CG_IUSED,n))continue;
+        if(cancelled(w)){rc=IFS_FS_BUSY;goto done;}
+        const uint8_t *ino=w->inodes+n*INODE_BYTES;
+        const uint64_t size=get64(ino+16);
+        if(!size)continue;
+        uint32_t count=blocks_for(w,size);
+        if(count>12u) {
+            rc=rd(w,disk(w,(uint32_t)get64(ino+208)),ind,w->bsize);
+            if(rc!=IFS_FS_OK)goto done;
+        }
+        uint32_t first=(uint32_t)get64(ino+112),end=first,used=0u;
+        int packed=1;
+        for(uint32_t j=0;j<count;++j) {
+            uint64_t at=j<12u?get64(ino+112u+8u*j):get64(ind+8u*(j-12u));
+            uint32_t len=frags_for(w,size,j);
+            if(!valid_run(w,at,len)){rc=IFS_FS_CORRUPT;goto done;}
+            if(at!=end)packed=0;
+            end=(uint32_t)at+len;used+=len;
+        }
+        /* Round the requested ten-percent byte reserve up to a fragment.
+         * Full last indirect blocks already contain allocator slack, but
+         * do not count that slack as free space outside the file. */
+        uint64_t gap_bytes=policy?(size/10u+(size%10u!=0u)):0u;
+        uint32_t gap=(uint32_t)((gap_bytes+w->fsize-1u)/w->fsize);
+        if(packed && gap && !placement_free(w,map,end,gap))packed=0;
+        if(!packed) {
+            uint32_t need=used+gap;
+            uint32_t run=0u;
+            first=0u;
+            /* Every full logical block begins at a native block boundary;
+             * starting at such a boundary also fits a final short run. */
+            for(uint32_t i=w->root+1u;i<w->total;++i) {
+                if(!(i%4096u) && cancelled(w)){rc=IFS_FS_BUSY;goto done;}
+                if(!bit(map,i)){run=0u;continue;}
+                if(!run && i%w->frag)continue;
+                if(++run==need){first=i+1u-need;break;}
+            }
+            if(!first){rc=IFS_FS_NO_SPACE;goto done;}
+            for(uint32_t i=0;i<need;++i)setbit(map,first+i,0u);
+        } else {
+            for(uint32_t i=0;i<gap;++i)setbit(map,end+i,0u);
+        }
+        p->entries[p->count++]=(Ufs2Placement){n,first,used,gap,size,!packed};
+    }
+    *out=p;p=NULL;rc=IFS_FS_OK;
+done:
+    if(ind)w->host->release(w->host->context,ind);
+    if(map)w->host->release(w->host->context,map);
+    if(p)w->host->release(w->host->context,p);
+    return rc;
+}
+void ufs2_relocation_release(Ufs2Mutation *w,Ufs2RelocationPlan *p)
+{
+    if(w && p)w->host->release(w->host->context,p);
 }

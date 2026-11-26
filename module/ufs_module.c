@@ -76,12 +76,17 @@ typedef struct {
     IfsFsHostRuntimeV2 host,read_host;
 #ifndef IFS_UFS_FIRMWARE_BUILD
     Ufs2Mutation *writer;
+    Ufs2RelocationPlan *plan;
+    uintptr_t plan_token;
 #endif
     LdUfsSummary summary;
     void *map_inventory;
 } Ufs2Session;
 static Ufs2Session sessions[UFS2_MAX_SESSIONS];
 static uintptr_t session_sequence;
+#ifndef IFS_UFS_FIRMWARE_BUILD
+static uintptr_t plan_sequence;
+#endif
 
 /* Copy only fields present in the caller's V2 host prefix. A consumer may
  * allocate its descriptor on the stack and reuse it after mount; the
@@ -211,6 +216,7 @@ static int unmount_volume_impl(void *volume)
     int rc=IFS_FS_OK;
 #ifndef IFS_UFS_FIRMWARE_BUILD
     if(ufs2_mutation_faulted(slot->writer))rc=IFS_FS_IO_ERROR;
+    ufs2_relocation_release(slot->writer,slot->plan);slot->plan=NULL;slot->plan_token=0u;
     ufs2_mutation_close(slot->writer);slot->writer=NULL;
 #endif
     slot->read_host=(IfsFsHostRuntimeV2){0};
@@ -290,10 +296,45 @@ static const IfsFsAllocationOpsV2 allocation_ops={
              IFS_FS_GROUP_ALLOCATION,0u,IFS_FS_ALLOCATION_MAP},
     .map=allocation_map
 };
+#ifndef IFS_UFS_FIRMWARE_BUILD
+static int relocation_plan(void *volume,const char *path,uint32_t policy,void **out)
+{
+    if(!out)return IFS_FS_INVALID;
+    *out=NULL;
+    if(!enter_operation())return IFS_FS_BUSY;
+    Ufs2Session *slot=find_session(volume);
+    if(!slot)return leave_operation(IFS_FS_INVALID);
+    if(!slot->writer)return leave_operation(IFS_FS_ACCESS);
+    if(slot->plan || plan_sequence==UINTPTR_MAX)return leave_operation(IFS_FS_BUSY);
+    int rc=ufs2_relocation_plan(slot->writer,path,policy,&slot->plan);
+    if(rc==IFS_FS_OK) {
+        slot->plan_token=++plan_sequence;
+        *out=(void *)slot->plan_token;
+    }
+    return leave_operation(rc);
+}
+static void relocation_release(void *volume,void *plan)
+{
+    if(!enter_operation())return;
+    Ufs2Session *slot=find_session(volume);
+    if(slot && slot->plan && slot->plan_token==(uintptr_t)plan) {
+        ufs2_relocation_release(slot->writer,slot->plan);
+        slot->plan=NULL;slot->plan_token=0u;
+    }
+    (void)leave_operation(IFS_FS_OK);
+}
+#endif
 static const IfsFsDefragOpsV2 defrag_ops = {
     .header = {IFS_FS_GROUP_ABI_V2, sizeof(IfsFsDefragOpsV2),
-               IFS_FS_GROUP_DEFRAG, 0u, IFS_FS_DEFRAG_MAP},
+               IFS_FS_GROUP_DEFRAG, 0u, IFS_FS_DEFRAG_MAP
+#ifndef IFS_UFS_FIRMWARE_BUILD
+               | IFS_FS_DEFRAG_PLAN
+#endif
+    },
     .map = map_path
+#ifndef IFS_UFS_FIRMWARE_BUILD
+    , .plan=relocation_plan,.release_plan=relocation_release
+#endif
 };
 static int stat_path_impl(void *volume, const char *path, IfsFsEntryV2 *entry)
 {
@@ -357,6 +398,7 @@ static int create_file(void *volume,const char *path,uint32_t type)
     Ufs2Session *slot=find_session(volume);
     if(!slot)return leave_operation(IFS_FS_INVALID);
     if(!slot->writer)return leave_operation(IFS_FS_ACCESS);
+    if(slot->plan)return leave_operation(IFS_FS_BUSY);
     mutation_refresh(slot);
     int rc=ufs2_mutation_create(slot->writer,path,type);
     if(rc==IFS_FS_OK)mutation_counts(slot);
@@ -368,6 +410,7 @@ static int write_file(void *volume,const char *path,uint64_t offset,const void *
     Ufs2Session *slot=find_session(volume);
     if(!slot)return leave_operation(IFS_FS_INVALID);
     if(!slot->writer)return leave_operation(IFS_FS_ACCESS);
+    if(slot->plan)return leave_operation(IFS_FS_BUSY);
     mutation_refresh(slot);
     int rc=ufs2_mutation_write(slot->writer,path,offset,data,bytes);
     if(rc==IFS_FS_OK)mutation_counts(slot);
