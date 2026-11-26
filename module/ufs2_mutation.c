@@ -669,11 +669,11 @@ int ufs2_relocation_plan(Ufs2Mutation *w,const char *path,uint32_t policy,
             if(at!=end)packed=0;
             end=(uint32_t)at+len;used+=len;
         }
-        /* Round the requested ten-percent byte reserve up to a fragment.
-         * Full last indirect blocks already contain allocator slack, but
-         * do not count that slack as free space outside the file. */
-        uint64_t gap_bytes=policy?(size/10u+(size%10u!=0u)):0u;
-        uint32_t gap=(uint32_t)((gap_bytes+w->fsize-1u)/w->fsize);
+        /* The public allocation unit is the full UFS block. Round ten
+         * percent of the allocated logical blocks upward, including tiny
+         * files, and reserve that many whole blocks of free fragments.
+         * Slack within the file is not free space outside the file. */
+        uint32_t gap=policy?(count/10u+(count%10u!=0u))*w->frag:0u;
         if(packed && gap && !placement_free(w,map,end,gap))packed=0;
         if(!packed) {
             uint32_t need=used+gap;

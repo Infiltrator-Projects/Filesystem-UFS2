@@ -156,6 +156,50 @@ static int crash_recovery(const Media *source,const IfsFsHostRuntimeV2 *runtime,
     return 0;
 }
 
+/* Verify the free space independently of the provider's private plan. */
+static int check_growth_gap(const IfsFsDefragOpsV2 *map,
+    const IfsFsAllocationOpsV2 *allocation,void *mount,const char *path,
+    uint64_t size,uint64_t block,uint64_t capacity,uint64_t *gap_start,
+    uint64_t *gap_end)
+{
+    uint64_t logical=0u,first=0u,last=0u,blocks=0u;
+    for(;;) {
+        IfsFsExtentV2 ext[16]={{0}};uint32_t count=0u;
+        int rc=map->map(mount,path,first,ext,16u,&count);
+        if(rc==IFS_FS_END) {
+            if(count || logical!=size) return -1;
+            break;
+        }
+        if(rc!=IFS_FS_OK || !count || count>16u)return -1;
+        for(uint32_t i=0;i<count;++i) {
+            const IfsFsExtentV2 *e=&ext[i];
+            if(!e->length || e->logical_offset!=logical ||
+               e->length>size-logical || e->physical_offset>capacity ||
+               e->length>capacity-e->physical_offset ||
+               (logical && e->physical_offset!=last))return -1;
+            blocks+=e->length/block+(e->length%block!=0u);
+            logical+=e->length;last=e->physical_offset+e->length;
+        }
+        first+=count;
+    }
+    uint64_t required=(blocks/10u+(blocks%10u!=0u))*block;
+    uint64_t at=last;
+    for(unsigned i=0u;i<2u;++i) {
+        IfsFsAllocationRangeV2 range={0};uint32_t count=0u;
+        uint64_t next=at,unknown=0u;
+        int rc=allocation->map(mount,at,&range,1u,&count);
+        if(rc!=IFS_FS_OK || count!=1u ||
+           !ifs_fs_allocation_page_v2_valid(capacity,at,rc,&range,1u,count,&next,&unknown) ||
+           unknown)return -1;
+        if(range.state==IFS_FS_SPACE_FREE) {
+            if(at-last>=block || range.length<required)return -1;
+            *gap_start=at;*gap_end=at+required;return 0;
+        }
+        if(range.state!=IFS_FS_SPACE_ALLOCATED || next-last>=block)return -1;
+        at=next;
+    }
+    return -1;
+}
 #define CHECK(x) do {if(!(x)){fprintf(stderr,"UFS2 format line %d: %s\n",__LINE__,#x);goto done;}}while(0)
 int main(int argc,char **argv)
 {
@@ -342,6 +386,15 @@ int main(int argc,char **argv)
         first+=count;
     }
     CHECK(logical==(uint64_t)14u*block);
+    const char *paths[]={"/alpha","/tiny","/beta","/edge"};
+    uint64_t sizes[]={(uint64_t)14u*block,block/2u+1u,block,1u};
+    uint64_t starts[4]={0},ends[4]={0};
+    for(unsigned i=0u;i<4u;++i) {
+        CHECK(check_growth_gap(map,allocation,mount,paths[i],sizes[i],
+                               block,m.bytes,&starts[i],&ends[i])==0);
+        for(unsigned j=0u;j<i;++j)
+            CHECK(ends[i]<=starts[j] || ends[j]<=starts[i]);
+    }
     CHECK(core->unmount(mount)==IFS_FS_OK);
     puts("UFS2 native format, create, write, fragmentation and independent reopen PASS");
     result=0;
