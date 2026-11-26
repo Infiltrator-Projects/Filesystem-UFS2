@@ -133,8 +133,19 @@ static int crash_recovery(const Media *source,const IfsFsHostRuntimeV2 *runtime,
                     close(scratch.fd);return -1;
                 }
             }
-            if(core->mount(&h,&mount,&info)!=IFS_FS_OK || !mount ||
-               map->recover(mount,0u,&repaired)!=IFS_FS_OK ||
+            if(core->mount(&h,&mount,&info)!=IFS_FS_OK || !mount) {
+                close(scratch.fd);return -1;
+            }
+            /* Pending recovery must retain the provider's exclusive lease,
+             * including against readers of another independently valid image. */
+            IfsFsHostRuntimeV2 other=ro;other.context=(void *)source;
+            void *second=NULL;
+            IfsFsVolumeInfoV2 second_info={.structure_bytes=sizeof(second_info)};
+            if(core->mount(&other,&second,&second_info)!=IFS_FS_BUSY || second) {
+                fprintf(stderr,"Recovery mount failed to exclude a second reader\n");
+                close(scratch.fd);return -1;
+            }
+            if(map->recover(mount,0u,&repaired)!=IFS_FS_OK ||
                repaired!=(boundary>=3u && boundary<=7u?1u:0u) ||
                map->recover(mount,0u,&again)!=IFS_FS_OK || again ||
                check_payload(core,mount,block,data) ||

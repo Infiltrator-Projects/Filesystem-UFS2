@@ -182,7 +182,10 @@ static int mount_volume_impl(const IfsFsHostRuntimeV2 *host, void **volume,
     if(writable)return IFS_FS_ACCESS;
 #else
     for(unsigned i=0;i<UFS2_MAX_SESSIONS;++i)
-        if(sessions[i].active && (writable || sessions[i].writer))return IFS_FS_BUSY;
+        /* A pending redo mount owns the same exclusive mutation lease as
+         * an opened writer, even before its native writer is reconstructed. */
+        if(sessions[i].active && (writable || sessions[i].writer ||
+                                 sessions[i].recovery_pending))return IFS_FS_BUSY;
 #endif
     slot = unused_session();
     if (!slot || session_sequence == UINTPTR_MAX)
