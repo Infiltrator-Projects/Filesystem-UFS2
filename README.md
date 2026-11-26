@@ -29,7 +29,7 @@ The target installation is `/System/Filesystems/UFS2.so` and `/System/Resources/
 - [Provider implementation](module/ufs_module.c)
 - [Native design or source provenance](native/filesystems/ufs/LINUX-SOURCE-PROVENANCE.md)
 - [Migration and source history](MIGRATION_STATUS.md)
-- [Original-format reference source](docs/UFS.pages) and [PDF](docs/UFS.pdf)
+- [Original-format reference source](docs/UFS2.pdfstreams) and [PDF](docs/UFS2.pdf)
 - [Project philosophy](docs/PHILOSOPHY.md)
 - [Common ABI](https://github.com/Infiltrator-Projects/Libraries)
 

@@ -24,7 +24,7 @@ jobs:
           name: UFS2-so
           path: |
             build/UFS2.so
-            docs/UFS.pdf
+            docs/UFS2.pdf
       - name: Verify exactly one PDF per runtime SO
         shell: bash
         run: |

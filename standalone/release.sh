@@ -54,7 +54,7 @@ build_deb() {
   bash standalone/build.sh --profile "$profile" --output "$so"
   c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror standalone/manual.cpp -o "$work/ufs2-manual"
   local pdf="$stage/System/Resources/Documentation/$repository.pdf"
-  "$work/ufs2-manual" docs/UFS.pages "$pdf" "$version"
+  "$work/ufs2-manual" docs/UFS2.pdfstreams "$pdf" "$version"
   test "$(head -c 5 "$pdf")" = '%PDF-'
   local source_hash=$(revision)
   [[ $source_hash =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid source revision' >&2; return 1; }
