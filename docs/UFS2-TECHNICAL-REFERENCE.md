@@ -4,6 +4,8 @@
 
 UFS2 is the later FreeBSD evolution of FFS, introduced with FreeBSD 5. It enlarges fragment pointers to 64 bits, expands inodes to 256 bytes and provides larger capacity and richer metadata. Magic 0x19540119 identifies the ordinary UFS2 format. Retain the distinction between logical block size, fragment size and device sector size. Compatibility features such as soft updates journaling, metadata check-hashes and snapshots need separate qualification.
 
+McKusick's BSDCon 2003 UFS2 paper explains the motivation for a larger boot area, wider pointers, high-resolution timestamps and extended attributes. The design retains the cylinder-group FFS philosophy rather than adding a pooled CoW model.
+
 ## Geometry and address units
 
 The Berkeley Fast File System divides a volume into cylinder groups. A filesystem block B contains F=B/f fragments of size f. F is normally 1, 2, 4 or 8. Stored block addresses refer to fragments, not necessarily whole filesystem blocks or disk sectors. Physical byte offset equals partition start plus fragment number times f. Validate B and f as powers of two, their ratio, all group bounds, and all products before trusting metadata. Cylinder geometry is historical placement information, not the geometry of a modern SSD.
@@ -60,6 +62,14 @@ A new inode requires a free inode bit, initialized metadata, then a valid direct
 
 Classical FFS does not have an unconditional on-disk redo journal. Soft updates impose metadata dependencies; soft-updates journaling adds a particular recovery protocol. Other BSD/Solaris journal schemes are not interchangeable. A checker must reconcile inode allocation, block ownership, fragment boundaries, link counts, directory reachability, group summaries and superblock totals. Do not mistake a clean flag for proof of consistency. An independent writer needs a validated profile for the enabled features, including snapshots, checksums and journal behavior. Test on disposable images from native newfs and verify with native fsck; include interrupted allocations and renames, not only clean read-back.
 
+## Implementation and qualification boundary
+
+Historical revision 6a3e6e9a55a2 declared probe, mount, stat, read and format. Both endian variants require independent fixtures. Inventory faults must be injected before lazy caching; partial ownership must not be returned on host I/O failure. Retained staged relocation or recovery internals are not proof of an exported qualified interface.
+
+Common V2 is the independent provider interface: https://github.com/Infiltrator-Projects/Libraries/blob/main/docs/FILESYSTEM_COMMON_ABI_V2.md . Negotiate real operation masks and media profiles. Use bounded host I/O, exclusive unmounted ownership and durable flush for mutation; distinguish unsupported, corrupt, I/O and stale-handle results. Test Media and Defragmenter use the same engine only for supported operations. Hosted, freestanding, BOOT, kernel, recovery and package qualification are independent. Current capability and release status belongs to the repository README and exact-source qualification records; historical evidence is not a current status claim.
+
+Historical source reference: https://github.com/Infiltrator-Projects/Filesystem-UFS2/tree/6a3e6e9a55a2 .
+
 ## Sources and independent implementation
 
-Primary design: McKusick, Joy, Leffler and Fabry, A Fast File System for UNIX (1984). Layout reference: FreeBSD release/14.2.0, sys/ufs/ffs/fs.h, sys/ufs/ufs/dinode.h and sys/ufs/ufs/dir.h: https://github.com/freebsd/freebsd-src/tree/release/14.2.0/sys/ufs . Independent cross-check: Linux v6.12 fs/ufs/ufs_fs.h and fs/ufs/balloc.c: https://github.com/torvalds/linux/tree/v6.12/fs/ufs . The original historical manual follows. Project provider claims in that appendix are historical, not current qualification. Exact journal replay and all vendor variants require additional source and fixture verification.
+Primary design: McKusick, Joy, Leffler and Fabry, A Fast File System for UNIX (1984). Layout reference: FreeBSD release/14.2.0, sys/ufs/ffs/fs.h, sys/ufs/ufs/dinode.h and sys/ufs/ufs/dir.h: https://github.com/freebsd/freebsd-src/tree/release/14.2.0/sys/ufs . Independent cross-check: Linux v6.12 fs/ufs/ufs_fs.h and fs/ufs/balloc.c: https://github.com/torvalds/linux/tree/v6.12/fs/ufs . The original  Project provider claims in that appendix are historical, not current qualification. Exact journal replay and all vendor variants require additional source and fixture verification.
