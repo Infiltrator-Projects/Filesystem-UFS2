@@ -22,11 +22,14 @@ target_include_directories(ufs2-boot PRIVATE
   "${COMMON_SOURCE_DIR}/src"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../native"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../compat")
-# Common core also contains unrelated floating-point conversion routines.
-# Compile that translation unit without the integer-only register constraint;
-# discard unused routines at link time. All filesystem code remains integer-only.
+# The integer-only constraint applies to the filesystem and arithmetic
+# translation units. Common core also contains hosted floating-point helpers;
+# compile it separately and discard unused sections at the link boundary.
 set_source_files_properties("${COMMON_SOURCE_DIR}/src/core.c" PROPERTIES
-  COMPILE_OPTIONS "-mno-general-regs-only;-fno-tree-vectorize;-fno-tree-slp-vectorize")
+  COMPILE_OPTIONS "-fno-tree-vectorize;-fno-tree-slp-vectorize")
+set_source_files_properties(../../module/ufs_module.c ../../native/ufs_native.c
+  "${COMMON_SOURCE_DIR}/src/arithmetic.c" runtime.c PROPERTIES
+  COMPILE_OPTIONS "-mgeneral-regs-only")
 target_compile_definitions(ufs2-boot PRIVATE
   IFS_UFS_MAJOR=2 IFS_UFS_V2_PRODUCTION=1 IFS_UFS_FIRMWARE_BUILD=1)
 # Firmware uses AMD64 SysV without CET, SIMD state assumptions,
@@ -35,6 +38,6 @@ target_compile_definitions(ufs2-boot PRIVATE
 target_compile_options(ufs2-boot PRIVATE
   -Wall -Wextra -Wpedantic -Werror -ffreestanding -fno-builtin
   -ffunction-sections -fdata-sections -fno-tree-loop-distribute-patterns
-  -fno-stack-protector -mno-red-zone -fcf-protection=none -mgeneral-regs-only -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
+  -fno-stack-protector -mno-red-zone -fcf-protection=none -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0)
 target_link_options(ufs2-boot PRIVATE
   -nostdlib -Wl,-z,nopack-relative-relocs,-z,max-page-size=4096,-Bsymbolic,-z,defs,-z,noexecstack,-z,relro,-z,now,--gc-sections)
