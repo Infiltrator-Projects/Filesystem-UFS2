@@ -22,6 +22,11 @@ target_include_directories(ufs2-boot PRIVATE
   "${COMMON_SOURCE_DIR}/src"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../native"
   "${CMAKE_CURRENT_SOURCE_DIR}/../../compat")
+# Common core also contains unrelated floating-point conversion routines.
+# Compile that translation unit without the integer-only register constraint;
+# discard unused routines at link time. All filesystem code remains integer-only.
+set_source_files_properties("${COMMON_SOURCE_DIR}/src/core.c" PROPERTIES
+  COMPILE_OPTIONS "-mno-general-regs-only;-fno-tree-vectorize;-fno-tree-slp-vectorize")
 target_compile_definitions(ufs2-boot PRIVATE
   IFS_UFS_MAJOR=2 IFS_UFS_V2_PRODUCTION=1 IFS_UFS_FIRMWARE_BUILD=1)
 # Firmware uses AMD64 SysV without CET, SIMD state assumptions,
