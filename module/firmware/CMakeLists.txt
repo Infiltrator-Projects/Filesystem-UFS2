@@ -12,7 +12,7 @@ add_library(ufs2-boot MODULE
   ../../module/ufs_module.c
   ../../native/ufs_native.c
   "${COMMON_SOURCE_DIR}/src/arithmetic.c"
-  $<TARGET_OBJECTS:common-integer-support>
+  "${COMMON_SOURCE_DIR}/src/core.c"
   runtime.c)
 set_target_properties(ufs2-boot PROPERTIES
   PREFIX "" OUTPUT_NAME "UFS2" SUFFIX ".so" C_VISIBILITY_PRESET hidden)
