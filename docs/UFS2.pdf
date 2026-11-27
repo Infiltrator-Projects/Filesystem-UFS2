@@ -387,7 +387,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 41 0 R >>
 endobj
 41 0 obj
-<< /Length 1336 >>
+<< /Length 1377 >>
 stream
 0.06 0.15 0.23 rg 0 768 595 74 re f
 1 1 1 rg BT /F2 10 Tf 43 811 Td (INFILTRATOR / FILESYSTEM ENGINEERING) Tj ET
@@ -396,11 +396,12 @@ BT /F2 22 Tf 43 784 Td (UFS2 - technical reference) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 706 Td (Primary design: McKusick, Joy, Leffler and Fabry, A Fast File System for UNIX) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 692 Td (\(1984\). Layout reference: FreeBSD release/14.2.0, sys/ufs/ffs/fs.h,) Tj ET
 0.08 0.14 0.20 rg BT /F3 10 Tf 43 678 Td (sys/ufs/ufs/dinode.h and sys/ufs/ufs/dir.h:) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 664 Td (https://github.com/freebsd/freebsd-src/tree/release/14.2.0/sys/ufs . Independent) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 650 Td (cross-check: Linux v6.12 fs/ufs/ufs_fs.h and fs/ufs/balloc.c:) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 636 Td (https://github.com/torvalds/linux/tree/v6.12/fs/ufs . The original Project provider) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (claims in that appendix are historical, not current qualification. Exact journal) Tj ET
-0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (replay and all vendor variants require additional source and fixture verification.) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 664 Td (https://github.com/freebsd/freebsd-src/tree/release/14.2.0/sys/ufs .) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 650 Td (Independent cross-check: Linux v6.12 fs/ufs/ufs_fs.h and fs/ufs/balloc.c:) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 636 Td (https://github.com/torvalds/linux/tree/v6.12/fs/ufs . Historical provider) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 622 Td (evidence is identified in Implementation and qualification boundary. Exact) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 608 Td (journal replay and all vendor variants require additional source and fixture) Tj ET
+0.08 0.14 0.20 rg BT /F3 10 Tf 43 594 Td (verification.) Tj ET
 0.2 0.3 0.4 rg BT /F1 9 Tf 43 32 Td (Historical development and engineering reference | 18) Tj ET
 endstream
 endobj
@@ -451,5 +452,5 @@ xref
 trailer
 << /Size 42 /Root 1 0 R >>
 startxref
-28859
+28900
 %%EOF
